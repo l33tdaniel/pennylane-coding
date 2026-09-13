@@ -1,0 +1,1744 @@
+<title>Qubits to Circuits</title>
+<style>
+  :root{
+    --bg:#eef1f5; --surface:#ffffff; --surface-2:#f4f6f9;
+    --ink:#13161d; --muted:#58616f; --faint:#8a94a3;
+    --line:#dde2ea; --line-strong:#c7cfda;
+    --accent:#0e8fa8; --accent-ink:#0a6b7f; --accent-soft:rgba(14,143,168,.10);
+    --phase:#b5720b; --phase-soft:rgba(181,114,11,.10);
+    --code-bg:#f4f6f9; --code-ink:#1c2530; --comment:#7c8797;
+    --shadow:0 1px 2px rgba(19,22,29,.05), 0 8px 24px rgba(19,22,29,.05);
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme:dark){
+      --bg:#0b0e13; --surface:#12161d; --surface-2:#171c25;
+      --ink:#e7ecf3; --muted:#98a4b5; --faint:#697487;
+      --line:#232a35; --line-strong:#2f3947;
+      --accent:#35c7dc; --accent-ink:#6fdcec; --accent-soft:rgba(53,199,220,.12);
+      --phase:#e0a13a; --phase-soft:rgba(224,161,58,.12);
+      --code-bg:#0e1218; --code-ink:#cdd7e3; --comment:#5f6b7d;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b0e13; --surface:#12161d; --surface-2:#171c25;
+    --ink:#e7ecf3; --muted:#98a4b5; --faint:#697487;
+    --line:#232a35; --line-strong:#2f3947;
+    --accent:#35c7dc; --accent-ink:#6fdcec; --accent-soft:rgba(53,199,220,.12);
+    --phase:#e0a13a; --phase-soft:rgba(224,161,58,.12);
+    --code-bg:#0e1218; --code-ink:#cdd7e3; --comment:#5f6b7d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
+  a{color:var(--accent-ink);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,kbd,pre{font-family:var(--mono)}
+
+  /* ---------- shell ---------- */
+  .shell{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;
+    max-width:1240px;margin:0 auto}
+  .rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+    border-right:1px solid var(--line);padding:26px 20px 60px;background:var(--bg)}
+  .main{min-width:0;padding:0 clamp(18px,4vw,56px)}
+
+  /* ---------- rail ---------- */
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .glyph{width:30px;height:30px;flex:0 0 auto;display:grid;place-items:center;
+    border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);
+    font-family:var(--mono);font-size:15px;color:var(--accent-ink)}
+  .brand b{font-size:15px;letter-spacing:.02em}
+  .rail-sub{font-family:var(--mono);font-size:11px;color:var(--faint);
+    text-transform:uppercase;letter-spacing:.12em;margin:2px 0 20px 40px}
+  nav.toc{display:flex;flex-direction:column;gap:1px}
+  nav.toc a{display:flex;gap:10px;align-items:baseline;padding:7px 10px;border-radius:7px;
+    color:var(--muted);font-size:13.5px;line-height:1.35}
+  nav.toc a .n{font-family:var(--mono);font-size:11.5px;color:var(--faint);
+    min-width:34px;font-variant-numeric:tabular-nums}
+  nav.toc a:hover{background:var(--surface-2);text-decoration:none;color:var(--ink)}
+  nav.toc a.active{background:var(--accent-soft);color:var(--ink)}
+  nav.toc a.active .n{color:var(--accent-ink)}
+  .toc-div{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);margin:18px 0 6px 10px}
+
+  /* ---------- top bar (mobile) ---------- */
+  .topbar{display:none}
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-ink);margin-bottom:18px}
+  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.02;letter-spacing:-.02em;
+    font-weight:600;text-wrap:balance;margin:0 0 18px}
+  .hero .lede{font-size:19px;color:var(--muted);max-width:60ch;margin:0}
+  .stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;min-width:120px}
+  .stat b{display:block;font-family:var(--mono);font-size:24px;letter-spacing:-.02em}
+  .stat span{font-size:12.5px;color:var(--muted)}
+
+  /* ---------- sections ---------- */
+  section{padding:52px 0;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+  .kicker{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .kicker .mod{font-family:var(--mono);font-size:13px;font-weight:600;
+    color:var(--accent-ink);background:var(--accent-soft);padding:3px 9px;border-radius:6px}
+  h2{font-size:clamp(24px,3.4vw,33px);line-height:1.12;letter-spacing:-.015em;
+    font-weight:600;margin:6px 0 0;text-wrap:balance}
+  .sec-lede{color:var(--muted);font-size:16.5px;max-width:66ch;margin:14px 0 0}
+  h3{font-size:16px;font-family:var(--mono);letter-spacing:.02em;font-weight:600;
+    margin:34px 0 4px;color:var(--ink)}
+
+  p{max-width:68ch}
+  .prose p{margin:14px 0}
+
+  /* ---------- exercise cards ---------- */
+  .ex{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px;margin-top:18px;box-shadow:var(--shadow)}
+  .ex-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .ex-num{font-family:var(--mono);font-size:12px;font-weight:600;color:#fff;
+    background:var(--accent);padding:3px 8px;border-radius:6px;letter-spacing:.02em}
+  :root[data-theme="dark"] .ex-num,
+  :root:not([data-theme="light"]) .ex-num{color:#06222a}
+  @media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .ex-num{color:#fff}}
+  .ex-head h4{font-size:17.5px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .ex p{color:var(--muted);font-size:15px;margin:10px 0}
+  .ex p strong{color:var(--ink);font-weight:600}
+
+  /* ---------- circuit + code ---------- */
+  pre{overflow-x:auto;margin:14px 0;border-radius:10px;font-size:13px;line-height:1.55}
+  pre.circuit{background:var(--surface-2);border:1px dashed var(--line-strong);
+    padding:14px 16px;color:var(--ink);white-space:pre}
+  pre.code{background:var(--code-bg);border:1px solid var(--line);padding:15px 17px;
+    color:var(--code-ink)}
+  pre.code .c{color:var(--comment);font-style:italic}
+  pre.code .k{color:var(--phase)}
+  .label-row{display:flex;align-items:center;gap:8px;margin-top:16px}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--faint)}
+  .tag.circuit-tag::before{content:"◌ "}
+  .tag.code-tag::before{content:"› "}
+
+  .callout{border-left:3px solid var(--phase);background:var(--phase-soft);
+    padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;font-size:14.5px}
+  .callout b{color:var(--phase)}
+
+  /* ---------- glossary ---------- */
+  .glossary-tools{display:flex;gap:12px;align-items:center;margin:20px 0 4px;flex-wrap:wrap}
+  #glossary-search{flex:1;min-width:220px;font-family:var(--sans);font-size:15px;
+    padding:11px 14px;border:1px solid var(--line-strong);border-radius:10px;
+    background:var(--surface);color:var(--ink)}
+  #glossary-search:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .g-count{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .terms{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    gap:14px;margin-top:18px}
+  .term{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px}
+  .term dt{font-weight:600;font-size:15.5px;margin-bottom:5px;display:flex;
+    align-items:baseline;gap:8px}
+  .term dt .sym{font-family:var(--mono);font-size:13px;color:var(--accent-ink)}
+  .term dd{margin:0;color:var(--muted);font-size:14px;line-height:1.55}
+  .term.hidden{display:none}
+  .no-hits{color:var(--muted);font-style:italic;margin-top:16px;display:none}
+
+  /* ---------- reference table ---------- */
+  .table-wrap{overflow-x:auto;margin-top:20px;border:1px solid var(--line);
+    border-radius:12px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:none}
+  td.g{font-family:var(--mono);color:var(--accent-ink);font-weight:600;white-space:nowrap}
+  td .m{font-family:var(--mono);font-size:13px}
+
+  footer{padding:44px 0 80px;color:var(--muted);font-size:14px}
+  footer p{max-width:70ch}
+
+  mjx-container{overflow-x:auto;overflow-y:hidden;max-width:100%}
+  mjx-container[display="true"]{margin:10px 0 !important}
+
+  /* ---------- theme toggle ---------- */
+  .theme-btn{position:fixed;bottom:18px;right:18px;z-index:40;width:42px;height:42px;
+    border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);
+    color:var(--ink);cursor:pointer;font-size:18px;box-shadow:var(--shadow);
+    display:grid;place-items:center}
+  .theme-btn:hover{border-color:var(--accent)}
+
+  /* ---------- notation / symbol grid ---------- */
+  .symgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+    gap:12px;margin-top:20px}
+  .symcard{display:flex;gap:15px;align-items:center;background:var(--surface);
+    border:1px solid var(--line);border-radius:12px;padding:13px 16px}
+  .symcard .big{font-family:var(--mono);font-size:29px;line-height:1;color:var(--accent-ink);
+    min-width:40px;text-align:center;flex:0 0 auto}
+  .symcard .meta{min-width:0}
+  .symcard .meta b{display:block;font-size:15px;letter-spacing:-.01em}
+  .symcard .meta .say{font-family:var(--mono);font-size:11px;color:var(--phase);
+    text-transform:uppercase;letter-spacing:.09em;margin:1px 0 3px}
+  .symcard .meta span.d{display:block;font-size:12.5px;color:var(--muted);line-height:1.45}
+  .subhead{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin:30px 0 -2px}
+  .postulates{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:12px}
+  .postulates li{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:0 12px 12px 0;padding:14px 18px}
+  .postulates li b{display:block;margin-bottom:3px;font-size:15.5px}
+  .postulates li span{color:var(--muted);font-size:14.5px}
+  .postulates li .p-num{font-family:var(--mono);font-size:11px;color:var(--accent-ink);
+    letter-spacing:.1em;text-transform:uppercase}
+
+  /* ---------- timeline / cards / pills ---------- */
+  .tl{list-style:none;padding:0;margin:22px 0 0;display:grid;gap:0}
+  .tl li{display:grid;grid-template-columns:70px 1fr;gap:16px;padding:13px 0;
+    border-top:1px solid var(--line)}
+  .tl li:last-child{border-bottom:1px solid var(--line)}
+  .tl li .yr{font-family:var(--mono);font-size:13px;color:var(--accent-ink);font-weight:600;
+    font-variant-numeric:tabular-nums}
+  .tl li b{font-size:15px}
+  .tl li span.d{display:block;color:var(--muted);font-size:14px;margin-top:2px}
+  .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .pill{font-family:var(--mono);font-size:12px;padding:5px 11px;border:1px solid var(--line-strong);
+    border-radius:999px;background:var(--surface);color:var(--muted)}
+  .gridcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+    gap:14px;margin-top:20px}
+  .mini{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px}
+  .mini b{display:block;font-size:15px;margin-bottom:5px;letter-spacing:-.01em}
+  .mini span{font-size:13.5px;color:var(--muted);line-height:1.5;display:block}
+  .mini .ci{font-family:var(--mono);font-size:12px;color:var(--accent-ink)}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .shell{grid-template-columns:1fr}
+    .rail{display:none;position:fixed;inset:0 0 0 0;z-index:50;height:100vh;width:min(320px,86vw);
+      border-right:1px solid var(--line);box-shadow:var(--shadow)}
+    .rail.open{display:block}
+    .topbar{display:flex;position:sticky;top:0;z-index:30;align-items:center;gap:12px;
+      padding:12px 18px;background:color-mix(in srgb,var(--bg) 88%,transparent);
+      backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+    .topbar b{font-size:14px}
+    .menu-btn{margin-left:auto;font-family:var(--mono);font-size:13px;padding:7px 12px;
+      border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);
+      color:var(--ink);cursor:pointer}
+    .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:45}
+    .scrim.open{display:block}
+    .main{padding:0 18px}
+    .hero{padding:40px 0 32px}
+  }
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+
+<div class="topbar">
+  <span class="glyph">ψ</span>
+  <b>Qubits to Circuits</b>
+  <button class="menu-btn" id="menuBtn" aria-label="Open course contents">Contents</button>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <aside class="rail" id="rail">
+    <div class="brand"><span class="glyph">ψ</span><b>Qubits to Circuits</b></div>
+    <div class="rail-sub">Quantum computing · Module I</div>
+    <nav class="toc" id="toc">
+      <div class="toc-div">Part 0 · Foundations</div>
+      <a href="#foundations"><span class="n">§0</span><span>Foundations &amp; how to read this</span></a>
+      <a href="#physics"><span class="n">§0</span><span>The physics underneath</span></a>
+      <a href="#notation"><span class="n">§0</span><span>Notation &amp; the Greek alphabet</span></a>
+      <a href="#glossary"><span class="n">§0</span><span>Key-term glossary</span></a>
+      <div class="toc-div">Part I · PennyLane codercises</div>
+      <a href="#m1"><span class="n">I.1</span><span>All about qubits</span></a>
+      <a href="#m2"><span class="n">I.2</span><span>Quantum circuits</span></a>
+      <a href="#m3"><span class="n">I.3</span><span>Unitary matrices</span></a>
+      <a href="#m4"><span class="n">I.4</span><span>X and H</span></a>
+      <a href="#m5"><span class="n">I.5</span><span>It's just a phase</span></a>
+      <a href="#m6"><span class="n">I.6</span><span>From a different angle</span></a>
+      <a href="#m7"><span class="n">I.7</span><span>Universal gate sets</span></a>
+      <a href="#m8"><span class="n">I.8</span><span>Prepare yourself</span></a>
+      <a href="#m9"><span class="n">I.9</span><span>Measurements</span></a>
+      <a href="#m10"><span class="n">I.10</span><span>What did you expect?</span></a>
+      <a href="#m11"><span class="n">I.11</span><span>Multi-qubit systems</span></a>
+      <div class="toc-div">Part II · Theory &amp; algorithms</div>
+      <a href="#machinery"><span class="n">II.1</span><span>The formal machinery</span></a>
+      <a href="#measure2"><span class="n">II.2</span><span>Measurement, bases &amp; interference</span></a>
+      <a href="#hardware"><span class="n">II.3</span><span>Physical qubits &amp; hardware</span></a>
+      <a href="#multi"><span class="n">II.4</span><span>Multi-qubit gates &amp; entanglement</span></a>
+      <a href="#protocols"><span class="n">II.5</span><span>Teleportation &amp; protocols</span></a>
+      <a href="#reversible"><span class="n">II.6</span><span>Reversible computation &amp; oracles</span></a>
+      <a href="#algorithms"><span class="n">II.7</span><span>The first quantum algorithms</span></a>
+      <a href="#qml"><span class="n">II.8</span><span>Machine learning &amp; encoding</span></a>
+      <a href="#complexity"><span class="n">II.9</span><span>Complexity &amp; quantum advantage</span></a>
+      <a href="#roadmap"><span class="n">II.10</span><span>The road ahead</span></a>
+      <a href="#history"><span class="n">II.11</span><span>A short history</span></a>
+      <div class="toc-div">Appendix</div>
+      <a href="#reference"><span class="n">§A</span><span>Gate reference table</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="hero" id="top">
+      <div class="eyebrow">Introduction to Quantum Algorithms · PennyLane Codebook + lecture course</div>
+      <h1>Qubits to Circuits</h1>
+      <p class="lede">A worked course through quantum computing from the ground up — the physics beneath
+        the math, states and gates, measurement and interference, entanglement and its protocols, and the
+        first quantum algorithms. Part I follows 33 PennyLane exercises term by term; Part II builds the
+        theory and algorithms on top, all explained in plain language with every symbol named.</p>
+      <div class="stats">
+        <div class="stat"><b>22</b><span>topics across two parts</span></div>
+        <div class="stat"><b>33</b><span>worked PennyLane exercises</span></div>
+        <div class="stat"><b>60+</b><span>key terms defined</span></div>
+        <div class="stat"><b>1&nbsp;→&nbsp;N</b><span>qubits, ground up</span></div>
+      </div>
+    </header>
+
+    <!-- ============ FOUNDATIONS ============ -->
+    <section id="foundations" class="prose">
+      <div class="kicker"><span class="mod">§0</span></div>
+      <h2>Foundations &amp; how to read this</h2>
+      <p class="sec-lede">Everything downstream is built from four objects: a <strong>state</strong>,
+        an <strong>operation</strong>, a <strong>measurement</strong>, and the <strong>probabilities</strong>
+        that connect them. Fix those and the rest of the course is bookkeeping.</p>
+
+      <h3>The single qubit</h3>
+      <p>A qubit lives in a two-dimensional complex vector space. Its state is a unit-length
+        column vector written in <em>Dirac notation</em> as
+        \[ |\psi\rangle = \alpha\,|0\rangle + \beta\,|1\rangle,\qquad |0\rangle=\begin{pmatrix}1\\0\end{pmatrix},\ |1\rangle=\begin{pmatrix}0\\1\end{pmatrix}. \]
+        Here \(\psi\) is the Greek letter <strong>psi</strong> (the symbol for a state), and \(\alpha,\beta\)
+        are <strong>alpha</strong> and <strong>beta</strong>. The complex numbers \(\alpha,\beta\) are
+        <em>amplitudes</em>. They are not probabilities —
+        their squared magnitudes are. Measuring in the computational basis returns
+        <code>0</code> with probability \(|\alpha|^2\) and <code>1</code> with probability \(|\beta|^2\),
+        which is why a physical state must satisfy the normalization condition \(|\alpha|^2+|\beta|^2=1\).</p>
+
+      <h3>Three things you can do to it</h3>
+      <p><strong>Evolve</strong> it with a unitary matrix \(U\): the new state is \(|\psi'\rangle = U|\psi\rangle\).
+        <strong>Measure</strong> it, collapsing the superposition to a basis outcome drawn from the Born-rule
+        probabilities. Or ask for an <strong>expectation value</strong> — the average measurement result of an
+        observable, which a simulator can compute exactly and hardware can only estimate by sampling.</p>
+
+      <h3>Phase is the whole game</h3>
+      <p>Two states that differ only by an overall factor \(e^{i\gamma}\) — a <em>global phase</em>, where
+        \(\gamma\) is the Greek letter <strong>gamma</strong> — are
+        physically identical; no measurement can tell them apart. A <em>relative phase</em> between
+        \(|0\rangle\) and \(|1\rangle\) is different: it is invisible to a computational-basis measurement
+        but changes the outcome in other bases, and it is the resource interference exploits. Half of this
+        course is learning to place, move, and read phases.</p>
+
+      <h3>Reading the notation</h3>
+      <p>Circuits are drawn left-to-right; each wire is a qubit, gates are boxes, and <code>[M]</code> marks a
+        measurement. In code the library is imported as <code>qp</code> (PennyLane's conventional alias is
+        <code>qml</code>; this course aliases it <code>qp</code>). Code blocks show the essential lines,
+        not the boilerplate.</p>
+      <div class="callout"><b>Convention that bites everyone:</b> PennyLane numbers qubits left-to-right, so
+        \(|10100\rangle\) puts wires 0 and 2 in \(|1\rangle\). Many textbooks and other frameworks make qubit 0
+        the <em>rightmost</em> bit. Always confirm the ordering with a new library.</div>
+    </section>
+
+    <!-- ============ PHYSICS ============ -->
+    <section id="physics" class="prose">
+      <div class="kicker"><span class="mod">§0</span></div>
+      <h2>The physics underneath</h2>
+      <p class="sec-lede">The code treats a qubit as a vector and a gate as a matrix, but that vector
+        describes something real. This section is the quantum mechanics the exercises assume — where the rules
+        come from, what a measurement physically does, and why any of this buys you computing power.</p>
+
+      <h3>Where quantum mechanics comes from</h3>
+      <p>Classical physics failed to explain a handful of experiments around 1900: hot objects didn't glow the
+        way theory predicted, and light knocked electrons out of metals in discrete lumps. The fix, from Planck
+        and Einstein, was that energy comes in indivisible packets — <em>quanta</em>. Energy is
+        \(E=h\nu\), where \(\nu\) (Greek <strong>nu</strong>) is the frequency and \(h\) is
+        <strong>Planck's constant</strong>, a tiny fixed number (\(6.626\times10^{-34}\) J·s) that sets the
+        scale at which the world stops being smooth and starts being grainy. Everything quantum is a consequence
+        of that graininess.</p>
+
+      <h3>The wavefunction and why the numbers are complex</h3>
+      <p>A quantum system is described by a <strong>state vector</strong> (in continuous systems, a
+        <em>wavefunction</em>) that lives in an abstract space called a <strong>Hilbert space</strong> —
+        just a complex vector space with an inner product. The amplitudes are <em>complex</em> numbers for a
+        physical reason: a complex number carries both a size and an angle (a <em>phase</em>), and it is the
+        interplay of phases that produces <strong>interference</strong>. Real probabilities alone could never do
+        that. When two paths to the same outcome have amplitudes that point in opposite directions, they cancel;
+        when they align, they reinforce. That is the double-slit experiment, and it is the whole reason quantum
+        computers can outrun classical ones on certain problems.</p>
+
+      <h3>Superposition — what it does and doesn't mean</h3>
+      <p>A qubit in \(\alpha|0\rangle+\beta|1\rangle\) is in a <strong>superposition</strong>. The honest
+        statement is not "it is both 0 and 1 at once" — it is that the system has a definite amplitude for each,
+        and only the act of measuring forces a single outcome. Before measurement the amplitudes evolve together
+        and can interfere; a quantum algorithm is choreography that arranges for the <em>wrong</em> answers'
+        amplitudes to cancel and the right answer's to survive.</p>
+
+      <h3>The four postulates of quantum mechanics</h3>
+      <p>The entire theory rests on four rules. Every exercise in this course is one of them in action.</p>
+      <ul class="postulates">
+        <li><span class="p-num">Postulate 1 · State</span><b>A system is a unit vector in a Hilbert space.</b>
+          <span>For one qubit that is \(|\psi\rangle=\alpha|0\rangle+\beta|1\rangle\) with
+          \(|\alpha|^2+|\beta|^2=1\). This is <a href="#m1">Module I.1</a>.</span></li>
+        <li><span class="p-num">Postulate 2 · Evolution</span><b>Closed-system evolution is unitary.</b>
+          <span>States change by \(|\psi'\rangle=U|\psi\rangle\) for a unitary \(U\). Continuously, this is the
+          <em>Schrödinger equation</em> \(i\hbar\,\tfrac{d}{dt}|\psi\rangle = \hat H|\psi\rangle\), where
+          \(\hat H\) (the <strong>Hamiltonian</strong>) is the energy operator and \(\hbar\) is Planck's
+          constant over \(2\pi\). Gates are just unitaries. This is <a href="#m3">I.3</a>–<a href="#m8">I.8</a>.</span></li>
+        <li><span class="p-num">Postulate 3 · Measurement</span><b>Measurement is probabilistic and irreversible.</b>
+          <span>Measuring an observable yields one of its eigenvalues; the probability is the squared amplitude
+          of the state along that eigenvector (the <em>Born rule</em>), and the state collapses to that
+          eigenvector. This is <a href="#m9">I.9</a>–<a href="#m10">I.10</a>.</span></li>
+        <li><span class="p-num">Postulate 4 · Composite systems</span><b>Systems combine by tensor product.</b>
+          <span>Two qubits live in a 4-dimensional space \(\mathbb{C}^2\otimes\mathbb{C}^2\). This is where
+          entanglement becomes possible. This is <a href="#m11">I.11</a>.</span></li>
+      </ul>
+
+      <h3>Observables, Hermitian operators, and eigenvalues</h3>
+      <p>A measurable quantity — spin along an axis, energy, the value of a Pauli — is represented by a
+        <strong>Hermitian operator</strong> (a matrix equal to its own conjugate transpose, \(A=A^\dagger\)).
+        Two facts make this the right object: a Hermitian operator's <strong>eigenvalues</strong> are always
+        real (so they can be actual meter readings), and its <strong>eigenvectors</strong> are orthogonal (so
+        the possible outcomes are distinguishable). Measuring \(A\) can only return one of its eigenvalues;
+        the Pauli operators have eigenvalues \(+1\) and \(-1\), which is why every Pauli expectation value lands
+        in \([-1,1]\). The <strong>expectation value</strong> \(\langle A\rangle=\langle\psi|A|\psi\rangle\) is
+        the average reading over many identical runs.</p>
+
+      <h3>Incompatible observables and uncertainty</h3>
+      <p>You cannot read every property at once. Two observables can be measured simultaneously only if they
+        <em>commute</em> — if \(AB=BA\). The Pauli operators do <strong>not</strong> commute with one another,
+        so a state with a definite \(Z\) value (like \(|0\rangle\)) has a completely uncertain \(X\) value, and
+        vice versa. This is Heisenberg's <strong>uncertainty principle</strong> in its cleanest form, and it is
+        the practical reason you must <em>choose a basis</em> to measure in — and rotate into it, as in
+        <a href="#m9">I.9</a>.</p>
+
+      <h3>The Bloch sphere — a picture of one qubit</h3>
+      <p>Any single-qubit state (ignoring global phase) can be written with two angles:
+        \(|\psi\rangle=\cos\tfrac{\theta}{2}|0\rangle+e^{i\varphi}\sin\tfrac{\theta}{2}|1\rangle\), where
+        \(\theta\) (<strong>theta</strong>) is a polar angle and \(\varphi\) (<strong>phi</strong>) an azimuthal
+        angle. Those are spherical coordinates, so every state is a <strong>point on a sphere</strong> — the
+        <strong>Bloch sphere</strong>. The north pole is \(|0\rangle\), the south pole \(|1\rangle\), and the
+        equator holds the superpositions \(|+\rangle,|-\rangle,|y_\pm\rangle\). Then the rotation gates are
+        literally rotations: \(RX,RY,RZ\) spin the sphere about the x-, y-, and z-axes. This is why the angle
+        appears as \(\theta/2\): the state's amplitudes turn at half the Bloch-vector angle (the SU(2) double
+        cover of the sphere's rotations), so a full \(2\pi\) rotation brings the Bloch vector back to start
+        while multiplying the state by \(-1\).</p>
+
+      <h3>Global phase as unobservable freedom</h3>
+      <p>Because the Born rule squares amplitudes, an overall \(e^{i\gamma}\) drops out of every probability.
+        The global phase is <em>gauge freedom</em> — real mathematics, no physical consequence — which is why
+        the course so often says "up to a global phase." A <em>relative</em> phase is different: it survives
+        into measurement probabilities the moment you change basis.</p>
+
+      <h3>Entanglement and nonlocality</h3>
+      <p>Postulate 4 allows states of two qubits that cannot be written as a product of single-qubit states —
+        <strong>entangled</strong> states like the Bell state \((|00\rangle+|11\rangle)/\sqrt2\). Measuring one
+        qubit instantly determines the other, no matter how far apart. That single-basis correlation on its own
+        could still be faked by classical shared randomness; what has <em>no</em> classical explanation is the
+        full pattern of correlations across <em>incompatible</em> measurement settings, which exceeds any
+        local hidden-variable model — the real content of <em>Bell's theorem</em>. The states in Module I.11
+        are deliberately
+        <em>separable</em>, so their expectation values factorize — but entanglement, created by two-qubit gates
+        like CNOT, is the resource that gives quantum computing its edge.</p>
+
+      <h3>Decoherence, noise, and why hardware samples</h3>
+      <p>An isolated qubit evolves unitarily forever; a real one is coupled to its environment, which
+        continuously "measures" it and scrambles the delicate relative phases. This leakage is
+        <strong>decoherence</strong>, and it is why real devices are noisy and why <a href="#m10">I.10</a> works
+        with finite <em>shots</em> and statistical error instead of exact values. The
+        <strong>no-cloning theorem</strong> — you cannot copy an unknown quantum state — means you also can't
+        dodge the problem by making backups. Managing decoherence is the central engineering challenge of the
+        field.</p>
+
+      <h3>What a qubit physically is</h3>
+      <p>The math is substrate-independent; the hardware is not. A qubit can be the spin of an electron or
+        nucleus (up/down), the polarization of a photon (horizontal/vertical), two energy levels of a trapped
+        ion, or — most common in today's processors — the two lowest states of a <strong>superconducting</strong>
+        circuit (a transmon). In every case the two chosen levels are relabelled \(|0\rangle\) and \(|1\rangle\),
+        and the abstract gates of this course are realized as carefully shaped microwave or laser pulses.</p>
+    </section>
+
+    <!-- ============ NOTATION ============ -->
+    <section id="notation">
+      <div class="kicker"><span class="mod">§0</span></div>
+      <h2>Notation &amp; the Greek alphabet</h2>
+      <p class="sec-lede">Physics leans hard on Greek letters and a few special symbols. Here is every one used
+        in this course — what to <strong>call it</strong>, how it's usually said, and what it means here.</p>
+
+      <p class="subhead">Greek letters</p>
+      <div class="symgrid">
+        <div class="symcard"><span class="big">ψ</span><span class="meta"><b>psi</b><span class="say">say "sy" (rhymes with "eye")</span><span class="d">A quantum state, |ψ⟩.</span></span></div>
+        <div class="symcard"><span class="big">φ</span><span class="meta"><b>phi</b><span class="say">say "fy" or "fee"</span><span class="d">An angle or phase — often the azimuthal Bloch angle.</span></span></div>
+        <div class="symcard"><span class="big">θ</span><span class="meta"><b>theta</b><span class="say">say "THAY-ta"</span><span class="d">A rotation angle; the polar Bloch angle.</span></span></div>
+        <div class="symcard"><span class="big">ω</span><span class="meta"><b>omega</b><span class="say">say "oh-MAY-ga"</span><span class="d">A rotation angle (RZ) or phase; also frequency.</span></span></div>
+        <div class="symcard"><span class="big">α</span><span class="meta"><b>alpha</b><span class="say">say "AL-fa"</span><span class="d">Amplitude of the |0⟩ component.</span></span></div>
+        <div class="symcard"><span class="big">β</span><span class="meta"><b>beta</b><span class="say">say "BAY-ta"</span><span class="d">Amplitude of the |1⟩ component.</span></span></div>
+        <div class="symcard"><span class="big">γ</span><span class="meta"><b>gamma</b><span class="say">say "GAM-ma"</span><span class="d">A global phase angle, e^{iγ}.</span></span></div>
+        <div class="symcard"><span class="big">π</span><span class="meta"><b>pi</b><span class="say">say "pie"</span><span class="d">3.14159…; rotation angles are fractions of π.</span></span></div>
+        <div class="symcard"><span class="big">λ</span><span class="meta"><b>lambda</b><span class="say">say "LAM-da"</span><span class="d">An eigenvalue (a possible measurement result).</span></span></div>
+        <div class="symcard"><span class="big">ν</span><span class="meta"><b>nu</b><span class="say">say "new"</span><span class="d">Frequency, in E = hν.</span></span></div>
+        <div class="symcard"><span class="big">ħ</span><span class="meta"><b>h-bar</b><span class="say">say "aitch-bar"</span><span class="d">Planck's constant ÷ 2π, in the Schrödinger equation.</span></span></div>
+        <div class="symcard"><span class="big">σ</span><span class="meta"><b>sigma (lowercase)</b><span class="say">say "SIG-ma"</span><span class="d">The Pauli matrices: σx, σy, σz = X, Y, Z.</span></span></div>
+        <div class="symcard"><span class="big">Σ</span><span class="meta"><b>sigma (capital)</b><span class="say">say "SIG-ma"</span><span class="d">Summation — add up a series of terms.</span></span></div>
+        <div class="symcard"><span class="big">δ</span><span class="meta"><b>delta</b><span class="say">say "DEL-ta"</span><span class="d">Kronecker delta δᵢⱼ: 1 if i=j, else 0 (orthonormality).</span></span></div>
+        <div class="symcard"><span class="big">ε</span><span class="meta"><b>epsilon</b><span class="say">say "EP-si-lon"</span><span class="d">Levi-Civita symbol εᵢⱼₖ in the Pauli product rule.</span></span></div>
+        <div class="symcard"><span class="big">Φ</span><span class="meta"><b>Phi (capital)</b><span class="say">say "fy" or "fee"</span><span class="d">Labels Bell states |Φ±⟩ = (|00⟩±|11⟩)/√2.</span></span></div>
+        <div class="symcard"><span class="big">Ψ</span><span class="meta"><b>Psi (capital)</b><span class="say">say "sy"</span><span class="d">Labels Bell states |Ψ±⟩ = (|01⟩±|10⟩)/√2.</span></span></div>
+      </div>
+
+      <p class="subhead">Structural symbols</p>
+      <div class="symgrid">
+        <div class="symcard"><span class="big">|ψ⟩</span><span class="meta"><b>ket</b><span class="say">"ket sy"</span><span class="d">A state, written as a column vector.</span></span></div>
+        <div class="symcard"><span class="big">⟨ψ|</span><span class="meta"><b>bra</b><span class="say">"bra sy"</span><span class="d">The conjugate-transpose row vector; pairs with a ket.</span></span></div>
+        <div class="symcard"><span class="big">⟨φ|ψ⟩</span><span class="meta"><b>bra-ket / inner product</b><span class="say">"bracket"</span><span class="d">Overlap of two states — a single complex number.</span></span></div>
+        <div class="symcard"><span class="big">⟨A⟩</span><span class="meta"><b>expectation value</b><span class="say">"expectation of A"</span><span class="d">Average measurement result of observable A.</span></span></div>
+        <div class="symcard"><span class="big">⊗</span><span class="meta"><b>tensor product</b><span class="say">"tensor" / "otimes"</span><span class="d">Combines subsystems: |0⟩⊗|1⟩ = |01⟩.</span></span></div>
+        <div class="symcard"><span class="big">†</span><span class="meta"><b>dagger</b><span class="say">"U-dagger"</span><span class="d">Conjugate transpose; for a unitary, its inverse.</span></span></div>
+        <div class="symcard"><span class="big">√</span><span class="meta"><b>square root / radical</b><span class="say">"root two"</span><span class="d">The 1/√2 normalizing factor is everywhere.</span></span></div>
+        <div class="symcard"><span class="big">i</span><span class="meta"><b>imaginary unit</b><span class="say">"i"</span><span class="d">√−1; e^{iθ} is a phase of angle θ.</span></span></div>
+        <div class="symcard"><span class="big">e^{iθ}</span><span class="meta"><b>phase factor</b><span class="say">"e to the i theta"</span><span class="d">A complex number of size 1 and angle θ.</span></span></div>
+        <div class="symcard"><span class="big">Ĥ</span><span class="meta"><b>operator hat</b><span class="say">"H-hat"</span><span class="d">A hat marks an operator, e.g. the Hamiltonian.</span></span></div>
+        <div class="symcard"><span class="big">≈</span><span class="meta"><b>approximately equal</b><span class="say">"approximately"</span><span class="d">e.g. −1/√2 ≈ −0.7071.</span></span></div>
+        <div class="symcard"><span class="big">±</span><span class="meta"><b>plus-minus</b><span class="say">"plus or minus"</span><span class="d">Both signs at once, as in |y±⟩.</span></span></div>
+      </div>
+
+      <p class="subhead">Operator &amp; calculus symbols (Part II)</p>
+      <div class="symgrid">
+        <div class="symcard"><span class="big">[A,B]</span><span class="meta"><b>commutator</b><span class="say">"commutator of A and B"</span><span class="d">AB − BA; zero if A and B can be measured together.</span></span></div>
+        <div class="symcard"><span class="big">⊕</span><span class="meta"><b>direct sum / XOR</b><span class="say">"o-plus" / "X-O-R"</span><span class="d">Stacks spaces (⊕), or adds bits mod 2 in a⊕b.</span></span></div>
+        <div class="symcard"><span class="big">ρ</span><span class="meta"><b>rho</b><span class="say">"row"</span><span class="d">Probability density, or a density matrix (a pure or mixed state).</span></span></div>
+        <div class="symcard"><span class="big">κ</span><span class="meta"><b>kappa</b><span class="say">"KAP-pa"</span><span class="d">Condition number of a matrix (sets HHL runtime).</span></span></div>
+        <div class="symcard"><span class="big">Δ</span><span class="meta"><b>Delta (capital)</b><span class="say">"DEL-ta"</span><span class="d">A small change or spacing, e.g. Δx.</span></span></div>
+        <div class="symcard"><span class="big">∇</span><span class="meta"><b>nabla / del</b><span class="say">"DEL" or "nabla"</span><span class="d">The gradient operator; ∇² is the Laplacian.</span></span></div>
+        <div class="symcard"><span class="big">∂</span><span class="meta"><b>partial</b><span class="say">"partial" / "del"</span><span class="d">Partial derivative, ∂/∂t.</span></span></div>
+        <div class="symcard"><span class="big">∫</span><span class="meta"><b>integral</b><span class="say">"integral"</span><span class="d">Continuous sum, e.g. in an inner product of wavefunctions.</span></span></div>
+        <div class="symcard"><span class="big">↑ ↓</span><span class="meta"><b>spin up / down</b><span class="say">"spin up," "spin down"</span><span class="d">|0⟩ = |↑⟩, |1⟩ = |↓⟩ for a spin qubit.</span></span></div>
+        <div class="symcard"><span class="big">𝒪</span><span class="meta"><b>big-O</b><span class="say">"big O of n"</span><span class="d">Order notation for how cost scales, e.g. O(√N).</span></span></div>
+        <div class="symcard"><span class="big">ℂ ℝ</span><span class="meta"><b>number sets</b><span class="say">"complex," "real"</span><span class="d">ℂ = complex numbers, ℝ = reals; ℂ^(2ⁿ) is n-qubit space.</span></span></div>
+        <div class="symcard"><span class="big">∈</span><span class="meta"><b>element of</b><span class="say">"in" / "element of"</span><span class="d">Membership: x ∈ {0,1} means x is 0 or 1.</span></span></div>
+      </div>
+    </section>
+
+    <!-- ============ GLOSSARY ============ -->
+    <section id="glossary">
+      <div class="kicker"><span class="mod">§0</span></div>
+      <h2>Key-term glossary</h2>
+      <p class="sec-lede">Every recurring term in the course, in one place. Search to jump to a definition;
+        each idea is developed further in the module it first appears.</p>
+      <div class="glossary-tools">
+        <input id="glossary-search" type="search" placeholder="Filter terms — e.g. phase, unitary, shots, entangled…" aria-label="Filter glossary terms">
+        <span class="g-count" id="gCount"></span>
+      </div>
+      <dl class="terms" id="terms">
+        <div class="term"><dt>Qubit</dt><dd>The basic unit of quantum information: a unit vector in a 2-dimensional complex space. Generalizes the classical bit, which can only be 0 or 1.</dd></div>
+        <div class="term"><dt>State vector <span class="sym">|ψ⟩</span></dt><dd>The complete description of a qubit's state as a normalized column of complex amplitudes.</dd></div>
+        <div class="term"><dt>Amplitude <span class="sym">α, β</span></dt><dd>The complex coefficients multiplying each basis state. Their squared magnitudes give measurement probabilities (the Born rule).</dd></div>
+        <div class="term"><dt>Computational basis <span class="sym">|0⟩, |1⟩</span></dt><dd>The standard reference basis for a qubit. Measurements return one of these labels by default.</dd></div>
+        <div class="term"><dt>Normalization</dt><dd>The requirement that |α|² + |β|² = 1, so that measurement probabilities sum to one. Achieved by dividing a vector by its norm.</dd></div>
+        <div class="term"><dt>Born rule</dt><dd>The law that the probability of a measurement outcome equals the squared magnitude of that outcome's amplitude.</dd></div>
+        <div class="term"><dt>Dirac / bra-ket notation</dt><dd>|ψ⟩ ("ket") is a column vector; ⟨ψ| ("bra") is its conjugate transpose (a row vector). Together they form inner products ⟨φ|ψ⟩.</dd></div>
+        <div class="term"><dt>Inner product <span class="sym">⟨φ|ψ⟩</span></dt><dd>A complex number measuring the overlap of two states. Computed as the conjugate of the first vector dotted with the second.</dd></div>
+        <div class="term"><dt>Orthonormal basis</dt><dd>A set of states that are each normalized (⟨v|v⟩ = 1) and mutually orthogonal (⟨v|w⟩ = 0). |0⟩ and |1⟩ are the canonical example.</dd></div>
+        <div class="term"><dt>Superposition</dt><dd>A state that is a nontrivial combination of basis states, e.g. |+⟩ = (|0⟩+|1⟩)/√2. The source of quantum parallelism.</dd></div>
+        <div class="term"><dt>|+⟩ and |−⟩</dt><dd>The equal superpositions (|0⟩ ± |1⟩)/√2. They are the eigenstates of Pauli X and form the "X basis."</dd></div>
+        <div class="term"><dt>Unitary matrix <span class="sym">U</span></dt><dd>A matrix with U†U = I. Every valid, reversible quantum operation is a unitary; it preserves normalization.</dd></div>
+        <div class="term"><dt>Gate</dt><dd>A named, reusable unitary applied to specific wires — the building block of a circuit.</dd></div>
+        <div class="term"><dt>Global phase</dt><dd>An overall factor e^{iγ} multiplying the entire state. Physically undetectable — states differing only by it are identical.</dd></div>
+        <div class="term"><dt>Relative phase</dt><dd>A phase between basis components (e.g. |0⟩ + e^{iφ}|1⟩). Invisible in the computational basis but observable in others; the engine of interference.</dd></div>
+        <div class="term"><dt>Hadamard <span class="sym">H</span></dt><dd>The gate (1/√2)[[1,1],[1,−1]]. Sends |0⟩→|+⟩ and |1⟩→|−⟩, creating uniform superposition. Its own inverse.</dd></div>
+        <div class="term"><dt>Pauli X <span class="sym">X</span></dt><dd>The bit-flip gate: |0⟩↔|1⟩. The quantum NOT gate.</dd></div>
+        <div class="term"><dt>Pauli Y <span class="sym">Y</span></dt><dd>The gate [[0,−i],[i,0]]. Combines a bit-flip and a phase-flip; eigenstates are |y±⟩ = (|0⟩ ± i|1⟩)/√2.</dd></div>
+        <div class="term"><dt>Pauli Z <span class="sym">Z</span></dt><dd>The phase-flip gate: |0⟩→|0⟩, |1⟩→−|1⟩. Leaves computational-basis probabilities unchanged.</dd></div>
+        <div class="term"><dt>Eigenvalue / eigenstate</dt><dd>For an observable, the possible measurement results (eigenvalues, ±1 for a Pauli) and the states that return them with certainty (eigenstates).</dd></div>
+        <div class="term"><dt>Rotation gates <span class="sym">RX, RY, RZ</span></dt><dd>Continuous single-axis rotations of the Bloch sphere by an angle θ. Note the half-angle: RX(θ) uses cos(θ/2), sin(θ/2).</dd></div>
+        <div class="term"><dt>Rot gate</dt><dd>The general single-qubit unitary Rot(φ,θ,ω) = RZ(ω)·RY(θ)·RZ(φ), parametrized by three Euler angles.</dd></div>
+        <div class="term"><dt>S gate</dt><dd>The phase gate: adds a relative phase of i to |1⟩. Equals RZ(π/2) up to a global phase; S = √Z.</dd></div>
+        <div class="term"><dt>T gate</dt><dd>Adds a phase e^{iπ/4} to |1⟩. Equals RZ(π/4) up to a global phase; T = √S. With H it forms a universal gate set.</dd></div>
+        <div class="term"><dt>Adjoint / dagger <span class="sym">U†</span></dt><dd>The inverse of a unitary (its conjugate transpose). In code, qp.adjoint(gate) undoes an operation; RZ†(ω) = RZ(−ω).</dd></div>
+        <div class="term"><dt>Universal gate set</dt><dd>A small set of gates that can build (or approximate to any precision) every unitary. Examples: {RZ, RY}, {RZ, RX}, {H, T}.</dd></div>
+        <div class="term"><dt>Euler (ZXZ / ZYZ) decomposition</dt><dd>The fact that any single-qubit unitary equals three rotations about alternating axes — the reason three parameters suffice.</dd></div>
+        <div class="term"><dt>Circuit synthesis</dt><dd>Building a target unitary from a fixed gate set. Part of the broader field of quantum compilation.</dd></div>
+        <div class="term"><dt>QNode</dt><dd>A PennyLane object binding a quantum function to a device, so the circuit can be called like an ordinary Python function.</dd></div>
+        <div class="term"><dt>Device</dt><dd>The backend that runs a circuit — a simulator (default.qubit) or real hardware. Created with a wire count and optional shot count.</dd></div>
+        <div class="term"><dt>Wire</dt><dd>PennyLane's name for a qubit / register line in a circuit, identified by an integer or label.</dd></div>
+        <div class="term"><dt>Circuit depth</dt><dd>The number of sequential gate layers — the longest path through the circuit's dependency graph. A rough proxy for runtime and error accumulation.</dd></div>
+        <div class="term"><dt>Measurement</dt><dd>Extracting classical information from a state, collapsing it to an eigenstate of the measured observable with Born-rule probability.</dd></div>
+        <div class="term"><dt>Expectation value <span class="sym">⟨A⟩</span></dt><dd>The probability-weighted average of an observable's eigenvalues in a state: ⟨ψ|A|ψ⟩. For a Pauli, it lies in [−1, 1].</dd></div>
+        <div class="term"><dt>Observable</dt><dd>A Hermitian operator whose eigenvalues are the possible measurement outcomes (e.g. PauliZ, or a tensor product Z⊗X).</dd></div>
+        <div class="term"><dt>Shots</dt><dd>The number of times a circuit is run and measured to estimate a quantity. Analytic (exact) results correspond to infinite shots.</dd></div>
+        <div class="term"><dt>Sampling</dt><dd>Drawing individual measurement outcomes rather than computing an average — what real hardware does.</dd></div>
+        <div class="term"><dt>Variance &amp; the 1/N law</dt><dd>The spread of a shot-based estimate. Averaging N shots divides the single-shot variance by N, so error shrinks as 1/√N.</dd></div>
+        <div class="term"><dt>Basis change measurement</dt><dd>To measure in a non-computational basis, apply the adjoint of the rotation that creates that basis, then measure normally.</dd></div>
+        <div class="term"><dt>Tensor product <span class="sym">⊗</span></dt><dd>How independent subsystems combine. Two qubits live in a 4-dimensional space; observables combine with @ in code.</dd></div>
+        <div class="term"><dt>Basis state <span class="sym">|n⟩</span></dt><dd>A multi-qubit computational-basis state labelled by a bitstring; qp.BasisState prepares one from a list of bits.</dd></div>
+        <div class="term"><dt>Separable / product state</dt><dd>A multi-qubit state that factorizes, e.g. |+⟩⊗|1⟩. Its measurements on different qubits are independent.</dd></div>
+        <div class="term"><dt>Entanglement</dt><dd>A multi-qubit state that does <em>not</em> factorize; measuring one qubit affects the others. Absent here, but the reason two-qubit gates matter.</dd></div>
+        <div class="term"><dt>Factorization of ⟨A⊗B⟩</dt><dd>For a product state, the joint expectation splits: ⟨A⊗B⟩ = ⟨A⟩⟨B⟩. This fails once qubits are entangled.</dd></div>
+        <div class="term"><dt>Template</dt><dd>A pre-built subroutine (e.g. StatePrep) usable in a circuit like a single gate. Decomposes into basic gates on the device.</dd></div>
+        <div class="term"><dt>StatePrep / Möttönen's method</dt><dd>A template that prepares any normalized state vector, expanding into a sequence of RY/RZ rotations (Möttönen decomposition).</dd></div>
+        <div class="term"><dt>Bloch sphere</dt><dd>The geometric picture of a single-qubit state as a point on a unit sphere; gates are rotations of it.</dd></div>
+        <div class="term"><dt>Hilbert space</dt><dd>The complex vector space (with an inner product) where quantum states live. One qubit uses ℂ²; n qubits use ℂ^(2ⁿ).</dd></div>
+        <div class="term"><dt>Wavefunction</dt><dd>The state described as a function of amplitudes. For a qubit it is just the state vector; the term is standard in continuous systems.</dd></div>
+        <div class="term"><dt>Complex amplitude</dt><dd>A state coefficient carrying both magnitude and phase. The phase enables interference; only the squared magnitude is observable.</dd></div>
+        <div class="term"><dt>Interference</dt><dd>Amplitudes for the same outcome adding or cancelling. Algorithms engineer wrong answers to cancel and right ones to reinforce.</dd></div>
+        <div class="term"><dt>Postulates of QM</dt><dd>The four rules: state = unit vector, evolution = unitary, measurement = probabilistic collapse (Born rule), composite = tensor product.</dd></div>
+        <div class="term"><dt>Schrödinger equation</dt><dd>iħ d|ψ⟩/dt = Ĥ|ψ⟩ — the continuous law of unitary evolution driven by the Hamiltonian.</dd></div>
+        <div class="term"><dt>Hamiltonian <span class="sym">Ĥ</span></dt><dd>The energy operator of a system. Its structure determines how a state evolves in time.</dd></div>
+        <div class="term"><dt>Hermitian operator</dt><dd>A matrix equal to its conjugate transpose (A = A†). Represents an observable: real eigenvalues, orthogonal eigenvectors.</dd></div>
+        <div class="term"><dt>Collapse</dt><dd>The abrupt, irreversible change of a state to a measured eigenstate. The one non-unitary step in the theory.</dd></div>
+        <div class="term"><dt>Uncertainty / commuting</dt><dd>Two observables can be known together only if AB = BA. X, Y, Z do not commute, so their values are mutually uncertain (Heisenberg).</dd></div>
+        <div class="term"><dt>Pauli matrices <span class="sym">σx σy σz</span></dt><dd>The three fundamental single-qubit observables/gates, X, Y, Z. Also the generators of the rotation gates.</dd></div>
+        <div class="term"><dt>Bell state</dt><dd>A maximally entangled two-qubit state, e.g. (|00⟩+|11⟩)/√2. The standard example of correlations with no classical analog.</dd></div>
+        <div class="term"><dt>Decoherence</dt><dd>Loss of quantum behavior as a qubit couples to its environment, scrambling relative phases. The main source of hardware error and noise.</dd></div>
+        <div class="term"><dt>No-cloning theorem</dt><dd>An unknown quantum state cannot be copied. Rules out backing up a state to avoid destructive measurement.</dd></div>
+        <div class="term"><dt>Planck's constant <span class="sym">h, ħ</span></dt><dd>The fundamental quantum of action (h ≈ 6.626×10⁻³⁴ J·s). Sets the scale where physics becomes quantized.</dd></div>
+        <div class="term"><dt>Quantum supremacy / advantage</dt><dd>A quantum device solving a task faster than any classical computer. Problem-specific, not a blanket speedup.</dd></div>
+        <div class="term"><dt>Completeness relation</dt><dd>Σ|i⟩⟨i| = I for any orthonormal basis. Lets you "insert a basis" anywhere and read off matrix elements.</dd></div>
+        <div class="term"><dt>Outer product <span class="sym">|a⟩⟨b|</span></dt><dd>A ket times a bra — a matrix (operator), as opposed to the inner product, which is a number.</dd></div>
+        <div class="term"><dt>Generator</dt><dd>The Hermitian G in U = e^{iθG}. Every unitary is an exponentiated observable; the Paulis generate single-qubit rotations.</dd></div>
+        <div class="term"><dt>Unitary group U(N) / SU(N)</dt><dd>The group of N×N unitaries; SU(N) adds det = 1. Single-qubit gates form SU(2), hence three parameters.</dd></div>
+        <div class="term"><dt>Commutator <span class="sym">[A,B]</span></dt><dd>AB − BA. Zero when operators can be measured together; the anticommutator is AB + BA.</dd></div>
+        <div class="term"><dt>Adiabatic theorem</dt><dd>A system in an eigenstate stays there if the Hamiltonian changes slowly enough. Basis of adiabatic computing and annealing.</dd></div>
+        <div class="term"><dt>Spin-½</dt><dd>The cleanest physical qubit: |0⟩ = spin up, |1⟩ = spin down. Source of the term "qubit as a spin."</dd></div>
+        <div class="term"><dt>Transmon</dt><dd>A superconducting qubit whose anharmonic energy levels isolate a clean two-level |0⟩/|1⟩ subspace. Today's dominant platform.</dd></div>
+        <div class="term"><dt>Transpilation</dt><dd>Rewriting an abstract circuit to a device's native gates and qubit connectivity — usually lengthening it.</dd></div>
+        <div class="term"><dt>Coupling map / topology</dt><dd>Which qubit pairs on a chip can directly interact. Determines how many SWAPs a circuit needs.</dd></div>
+        <div class="term"><dt>Fidelity / error rate</dt><dd>How accurately a gate or measurement performs. Below 1 on all real hardware.</dd></div>
+        <div class="term"><dt>NISQ</dt><dd>Noisy Intermediate-Scale Quantum: today's regime of tens–hundreds of noisy, uncorrected qubits.</dd></div>
+        <div class="term"><dt>Kronecker product</dt><dd>The component-level form of the tensor product: stacks scaled copies of one vector/matrix by the entries of another.</dd></div>
+        <div class="term"><dt>Direct sum <span class="sym">⊕</span></dt><dd>Combining spaces by stacking bases and adding dimensions (operators act block-diagonally). Contrast the tensor product, which multiplies.</dd></div>
+        <div class="term"><dt>Partial trace</dt><dd>Tracing out one subsystem to get the effective (reduced) state of the rest of an entangled system.</dd></div>
+        <div class="term"><dt>CNOT / controlled-U</dt><dd>Two-qubit gates that act on a target only when the control is |1⟩. CNOT flips; controlled-U applies any single-qubit gate.</dd></div>
+        <div class="term"><dt>CZ / CPhase(φ)</dt><dd>Puts a phase on |11⟩ only. CPhase(π) = CZ, a −1 on |11⟩; symmetric in its two qubits.</dd></div>
+        <div class="term"><dt>SWAP gate</dt><dd>Exchanges two qubits, |ab⟩ → |ba⟩. Equals ½(I⊗I + X⊗X + Y⊗Y + Z⊗Z).</dd></div>
+        <div class="term"><dt>GHZ state</dt><dd>The three-qubit (or N-qubit) maximally entangled state (|000⟩+|111⟩)/√2.</dd></div>
+        <div class="term"><dt>Superdense coding</dt><dd>Sending two classical bits by transmitting one qubit, using a pre-shared Bell pair.</dd></div>
+        <div class="term"><dt>Quantum teleportation</dt><dd>Moving an unknown state to a distant qubit using a shared Bell pair and two classical bits. The original is destroyed.</dd></div>
+        <div class="term"><dt>Oracle <span class="sym">U_f</span></dt><dd>A reversible black-box unitary encoding a function: |x⟩|y⟩ → |x⟩|y⊕f(x)⟩.</dd></div>
+        <div class="term"><dt>Reversible computation</dt><dd>Logic that can run backwards. Required because quantum gates are unitary; Toffoli and Fredkin are universal reversible gates.</dd></div>
+        <div class="term"><dt>Toffoli / Fredkin</dt><dd>Three-qubit gates (controlled-controlled-NOT and controlled-SWAP) that make classical logic reversible.</dd></div>
+        <div class="term"><dt>Quantum parallelism</dt><dd>Evaluating a function on a superposition of all inputs at once — though measurement returns only one result.</dd></div>
+        <div class="term"><dt>Phase kickback</dt><dd>With the target in |−⟩, an oracle stamps (−1)^{f(x)} onto the input's phase instead of flipping the target. Powers Deutsch-type algorithms.</dd></div>
+        <div class="term"><dt>Walsh–Hadamard transform</dt><dd>W = H^⊗n: a Hadamard on every qubit, turning |0…0⟩ into an equal superposition of all 2ⁿ states.</dd></div>
+        <div class="term"><dt>Deutsch / Deutsch–Jozsa</dt><dd>Decide if a function is constant or balanced in one oracle query — the first proofs of quantum query speedup.</dd></div>
+        <div class="term"><dt>Bernstein–Vazirani</dt><dd>Recover a hidden bit-string s from f(x)=x·s in a single query, versus n queries classically.</dd></div>
+        <div class="term"><dt>Query complexity</dt><dd>The number of oracle calls an algorithm needs. The setting where quantum advantage is first proven.</dd></div>
+        <div class="term"><dt>Feature map / data encoding</dt><dd>The circuit that loads classical data into a quantum state. Schemes: basis, amplitude, angle, time-evolution, Hamiltonian.</dd></div>
+        <div class="term"><dt>Data re-uploading</dt><dd>Feeding the same input into a circuit repeatedly between trainable gates, making even one qubit a universal classifier.</dd></div>
+        <div class="term"><dt>Variational quantum algorithm (VQA / VQE)</dt><dd>A parametrized circuit trained by a classical optimizer to minimize a measured cost. VQE targets ground-state energies.</dd></div>
+        <div class="term"><dt>Swap test</dt><dd>An H – controlled-SWAP – H circuit on an ancilla that estimates the overlap |⟨a|b⟩|² of two states.</dd></div>
+        <div class="term"><dt>QFT &amp; phase estimation</dt><dd>The quantum Fourier transform finds periodicity fast; phase estimation reads an eigenvalue's phase. Core of Shor's algorithm.</dd></div>
+        <div class="term"><dt>Shor's algorithm</dt><dd>Factors large integers in polynomial time, threatening RSA encryption. The field's most famous result.</dd></div>
+        <div class="term"><dt>Grover's algorithm</dt><dd>Finds a marked item among N in O(√N) steps — a quadratic speedup for unstructured search.</dd></div>
+        <div class="term"><dt>Quantum annealing</dt><dd>Solving optimization by slowly evolving to the ground state of a problem Hamiltonian (the adiabatic theorem in practice).</dd></div>
+        <div class="term"><dt>QAOA</dt><dd>Quantum Approximate Optimization Algorithm — a near-term variational method for combinatorial problems like max-cut.</dd></div>
+        <div class="term"><dt>Polynomial vs exponential</dt><dd>Efficient algorithms scale as a power of the input size; inefficient ones scale as 2ⁿ. The line between easy and hard.</dd></div>
+        <div class="term"><dt>Simon's algorithm</dt><dd>Finds a hidden period of a function with an exponential query speedup — the bridge from the oracle algorithms to Shor's period-finding core.</dd></div>
+        <div class="term"><dt>Quantum error correction</dt><dd>Protecting information by spreading it over many physical qubits (bit-flip/phase-flip codes, stabilizers). The threshold theorem: below a threshold error rate, more qubits mean a more reliable logical qubit.</dd></div>
+        <div class="term"><dt>Hidden subgroup problem</dt><dd>The abstract structure behind many quantum speedups (Simon, Shor). The discrete logarithm problem is another instance Shor's approach solves.</dd></div>
+        <div class="term"><dt>Hamming weight / distance</dt><dd>The number of 1-bits in a string (weight), or the number of positions where two strings differ (distance). Appears in the bit-string identities behind Deutsch–Jozsa.</dd></div>
+      </dl>
+      <p class="no-hits" id="noHits">No terms match that search.</p>
+    </section>
+
+    <!-- ============ MODULE I.1 ============ -->
+    <section id="m1">
+      <div class="kicker"><span class="mod">I.1</span></div>
+      <h2>All about qubits</h2>
+      <p class="sec-lede">Before any framework, build the qubit by hand in NumPy: a normalized vector,
+        an inner product, a measurement drawn from probabilities, and a unitary applied as a matrix.
+        These five exercises are the entire model in miniature.</p>
+
+      <article class="ex" id="i-1-1">
+        <div class="ex-head"><span class="ex-num">I.1.1</span><h4>Normalization of quantum states</h4></div>
+        <p>An arbitrary combination \(\alpha|0\rangle+\beta|1\rangle\) is not yet a physical state.
+          <strong>Normalize</strong> it by dividing by its norm \(\sqrt{|\alpha|^2+|\beta|^2}\), so the
+          squared amplitudes — the measurement probabilities — sum to one.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>state = alpha * ket_0 + beta * ket_1
+norm  = np.sqrt(np.abs(alpha)**2 + np.abs(beta)**2)
+return state / norm</code></pre>
+      </article>
+
+      <article class="ex" id="i-1-2">
+        <div class="ex-head"><span class="ex-num">I.1.2</span><h4>Inner product &amp; orthonormal bases</h4></div>
+        <p>The <strong>inner product</strong> \(\langle\phi|\psi\rangle\) is the overlap of two states.
+          The bra \(\langle\phi|\) is the <em>conjugate transpose</em> of the ket, so the computation is
+          the conjugate of one vector dotted with the other. Verifying \(\langle0|0\rangle=\langle1|1\rangle=1\)
+          and \(\langle0|1\rangle=0\) proves \(\{|0\rangle,|1\rangle\}\) is <strong>orthonormal</strong>.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code><span class="c"># the bra ⟨s1| is the conjugate transpose of the ket |s1⟩</span>
+return np.dot(np.conj(state_1), state_2)</code></pre>
+      </article>
+
+      <article class="ex" id="i-1-3">
+        <div class="ex-head"><span class="ex-num">I.1.3</span><h4>Sampling measurement outcomes</h4></div>
+        <p>A <strong>measurement</strong> is a random draw. The probabilities are the squared
+          amplitudes \(|\langle0|\psi\rangle|^2,\,|\langle1|\psi\rangle|^2\); simulate many measurements
+          by sampling <code>0</code> or <code>1</code> from that distribution.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>probs = np.abs(state)**2
+return np.random.choice([0, 1], size=num_meas, p=probs)</code></pre>
+      </article>
+
+      <article class="ex" id="i-1-4">
+        <div class="ex-head"><span class="ex-num">I.1.4</span><h4>Applying a quantum operation</h4></div>
+        <p>Operations are <strong>unitary matrices</strong>; the post-operation state is \(|\psi'\rangle=U|\psi\rangle\),
+          a matrix–vector product. Here \(U\) is the Hadamard matrix — and note it is its own inverse,
+          \(U(U|0\rangle)=|0\rangle\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>U = np.array([[1, 1], [1, -1]]) / np.sqrt(2)
+return np.dot(U, state)</code></pre>
+      </article>
+
+      <article class="ex" id="i-1-5">
+        <div class="ex-head"><span class="ex-num">I.1.5</span><h4>A simple quantum algorithm</h4></div>
+        <p>Every quantum program is the same three steps: <strong>initialize</strong> a state,
+          <strong>apply</strong> operations, <strong>measure</strong>. Chaining the three functions above
+          reproduces the full pipeline in a single line — the template for everything that follows.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>return measure_state(apply_u(initialize_state()), 100)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.2 ============ -->
+    <section id="m2">
+      <div class="kicker"><span class="mod">I.2</span></div>
+      <h2>Quantum circuits</h2>
+      <p class="sec-lede">PennyLane takes over the matrix bookkeeping. You describe a circuit as an ordinary
+        Python function, bind it to a device as a <strong>QNode</strong>, and call it. Order matters,
+        and so does depth.</p>
+
+      <article class="ex" id="i-2-1">
+        <div class="ex-head"><span class="ex-num">I.2.1</span><h4>Order of operations</h4></div>
+        <p>Gates in a quantum function run <strong>top to bottom</strong>, so the line order must match the
+          circuit's left-to-right order. Reordering scrambled gates to match the diagram is the whole task —
+          a reminder that a circuit is a sequence, not a set.</p>
+        <div class="label-row"><span class="tag circuit-tag">circuit</span></div>
+        <pre class="circuit">|0> --*--[H]--(+)--------[M]
+      |        |
+|0> --(+)------|--[RY]---[M]
+               |
+|0> --[RX]-----*---------[M]</pre>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.CNOT(wires=[0, 1])
+qp.RX(theta, wires=2)
+qp.Hadamard(wires=0)
+qp.CNOT(wires=[2, 0])
+qp.RY(phi, wires=1)
+return qp.probs(wires=[0, 1, 2])</code></pre>
+      </article>
+
+      <article class="ex" id="i-2-2">
+        <div class="ex-head"><span class="ex-num">I.2.2</span><h4>Building a QNode</h4></div>
+        <p>A <strong>QNode</strong> binds a quantum function to a <strong>device</strong> so it can be called
+          like a normal function. Construct one explicitly with <code>qp.QNode(func, dev)</code>.
+          <code>qp.probs</code> returns the probability of every output basis state.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>dev = qp.device("default.qubit", wires=3)
+
+def my_circuit(theta, phi, omega):
+    qp.RX(theta, wires=0); qp.RY(phi, wires=1); qp.RZ(omega, wires=2)
+    qp.CNOT(wires=[0,1]); qp.CNOT(wires=[1,2]); qp.CNOT(wires=[2,0])
+    return qp.probs(wires=[0, 1, 2])
+
+my_qnode = qp.QNode(my_circuit, dev)</code></pre>
+      </article>
+
+      <article class="ex" id="i-2-3">
+        <div class="ex-head"><span class="ex-num">I.2.3</span><h4>The QNode decorator</h4></div>
+        <p>The idiomatic shortcut: decorate the function with <code>@qp.qnode(dev)</code>. It produces a
+          QNode of the same name, already bound to the device — no separate construction step.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code><span class="k">@qp.qnode(dev)</span>
+def my_circuit(theta, phi, omega):
+    ...
+    return qp.probs(wires=[0, 1, 2])</code></pre>
+      </article>
+
+      <article class="ex" id="i-2-4">
+        <div class="ex-head"><span class="ex-num">I.2.4</span><h4>Circuit depth</h4></div>
+        <p><strong>Depth</strong> is the number of layers that must run in sequence — the longest path through
+          the circuit's dependency graph (DAG). Gates on different wires share a layer; a gate waits only for
+          the wires it touches.</p>
+        <pre class="circuit">Layer 1: RX(θ), RY(φ), RZ(ω)   (parallel, different wires)
+Layer 2: CNOT(0,1)
+Layer 3: CNOT(1,2)             (waits for wire 1)
+Layer 4: CNOT(2,0)            (waits for wire 2)   →  depth = 4</pre>
+        <div class="callout"><b>Verify, don't guess:</b> <code>qp.specs(my_circuit)(...)['resources'].depth</code>
+          returns the depth PennyLane computes, so you can check the count.</div>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.3 ============ -->
+    <section id="m3">
+      <div class="kicker"><span class="mod">I.3</span></div>
+      <h2>Unitary matrices</h2>
+      <p class="sec-lede">Any unitary can be dropped straight into a circuit — either as a raw matrix or,
+        for a single qubit, as three tunable angles.</p>
+
+      <article class="ex" id="i-3-1">
+        <div class="ex-head"><span class="ex-num">I.3.1</span><h4>Unitaries in PennyLane</h4></div>
+        <p><code>qp.QubitUnitary</code> applies an arbitrary matrix to chosen wires, so you never do the
+          matrix arithmetic by hand again (compare I.1.4). You supply the unitary; the device applies it.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>U = np.array([[1, 1], [1, -1]]) / np.sqrt(2)
+qp.QubitUnitary(U, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-3-2">
+        <div class="ex-head"><span class="ex-num">I.3.2</span><h4>Parametrized unitaries — the Rot gate</h4></div>
+        <p>Every single-qubit unitary can be written with three real parameters. That general form is the
+          <strong>Rot gate</strong>:</p>
+        \[ U(\phi,\theta,\omega)=\begin{pmatrix} e^{-i(\phi+\omega)/2}\cos\tfrac{\theta}{2} & -e^{i(\phi-\omega)/2}\sin\tfrac{\theta}{2}\\[4pt] e^{-i(\phi-\omega)/2}\sin\tfrac{\theta}{2} & e^{i(\phi+\omega)/2}\cos\tfrac{\theta}{2}\end{pmatrix} \]
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Rot(phi, theta, omega, wires=0)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.4 ============ -->
+    <section id="m4">
+      <div class="kicker"><span class="mod">I.4</span></div>
+      <h2>X and H</h2>
+      <p class="sec-lede">Two workhorses. Pauli X flips a bit; Hadamard makes a superposition. Combining
+        them already reveals a gate identity.</p>
+
+      <article class="ex" id="i-4-1">
+        <div class="ex-head"><span class="ex-num">I.4.1</span><h4>Flipping bits</h4></div>
+        <p>Qubits start in \(|0\rangle\). The <strong>Pauli X</strong> gate flips \(|0\rangle\leftrightarrow|1\rangle\),
+          so it is the standard way to initialize a qubit in \(|1\rangle\) before doing anything else.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>if state == 1:
+    qp.PauliX(wires=0)
+qp.QubitUnitary(U, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-4-2">
+        <div class="ex-head"><span class="ex-num">I.4.2</span><h4>Uniform superposition</h4></div>
+        <p>The matrix used throughout is the <strong>Hadamard</strong>. It sends \(|0\rangle\) to the uniform
+          superposition \(|+\rangle=(|0\rangle+|1\rangle)/\sqrt2\) — which is why it opens nearly every
+          quantum algorithm.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-4-3">
+        <div class="ex-head"><span class="ex-num">I.4.3</span><h4>Combining X and H</h4></div>
+        <p>Applying H to each basis state gives \(H|0\rangle=|+\rangle\) and \(H|1\rangle=|-\rangle=(|0\rangle-|1\rangle)/\sqrt2\).
+          Both have measurement probabilities \((\tfrac12,\tfrac12)\); they differ only by a <strong>relative
+          phase</strong> the computational basis cannot see.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>if state == 1:
+    qp.PauliX(wires=0)
+qp.Hadamard(wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-4-4">
+        <div class="ex-head"><span class="ex-num">I.4.4</span><h4>A QNode with X and H — a hidden Z</h4></div>
+        <p>The identity <strong>HXH = Z</strong>: sandwiching X between two Hadamards is a Pauli Z in disguise.
+          It leaves \(|0\rangle\) alone and sends \(|1\rangle\to-|1\rangle\). Gate identities like this are what
+          make compilation possible.</p>
+        <div class="label-row"><span class="tag circuit-tag">circuit</span></div>
+        <pre class="circuit">|0> --[H]--[X]--[H]--[M]        (= Pauli Z)</pre>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)
+qp.PauliX(wires=0)
+qp.Hadamard(wires=0)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.5 ============ -->
+    <section id="m5">
+      <div class="kicker"><span class="mod">I.5</span></div>
+      <h2>It's just a phase</h2>
+      <p class="sec-lede">The Z family does nothing to computational-basis probabilities and everything to
+        relative phase. Meet Z, its continuous version RZ, and the fixed fractions S and T.</p>
+
+      <article class="ex" id="i-5-1">
+        <div class="ex-head"><span class="ex-num">I.5.1</span><h4>The Pauli Z gate</h4></div>
+        <p><strong>Z</strong> acts as \(|0\rangle\to|0\rangle,\ |1\rangle\to-|1\rangle\). On \(|+\rangle\) it
+          produces \(|-\rangle\). Computational-basis probabilities stay \((\tfrac12,\tfrac12)\) — Z only flips
+          the relative phase.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)   <span class="c"># make |+⟩</span>
+qp.PauliZ(wires=0)     <span class="c"># → |−⟩</span></code></pre>
+      </article>
+
+      <article class="ex" id="i-5-2">
+        <div class="ex-head"><span class="ex-num">I.5.2</span><h4>The Z rotation</h4></div>
+        <p><strong>RZ(ω)</strong> distributes a phase symmetrically: it sends
+          \(\alpha|0\rangle+\beta|1\rangle\) to \(e^{-i\omega/2}\alpha|0\rangle+e^{i\omega/2}\beta|1\rangle\),
+          i.e. a relative phase \(e^{i\omega}\) on \(|1\rangle\). Choosing \(\omega=\pi\) reproduces Pauli Z
+          up to the undetectable global phase \(-i\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)
+qp.RZ(np.pi, wires=0)  <span class="c"># = Z up to global phase −i</span></code></pre>
+      </article>
+
+      <article class="ex" id="i-5-3">
+        <div class="ex-head"><span class="ex-num">I.5.3</span><h4>The S and T gates &amp; adjoints</h4></div>
+        <p>The quarter-turn \(RZ(\pi/2)\) is the <strong>S gate</strong>; the eighth-turn \(RZ(\pi/4)\) is the
+          <strong>T gate</strong>. The <strong>adjoint</strong> (inverse) is taken with <code>qp.adjoint</code>,
+          wrapping the operation before its arguments, since \(RZ^\dagger(\omega)=RZ(-\omega)\).</p>
+        <div class="label-row"><span class="tag circuit-tag">circuit</span></div>
+        <pre class="circuit">|0> --[H]--[S]--[T†]--[RZ(0.3)]--[S†]--[M]</pre>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)
+qp.S(wires=0)
+qp.adjoint(qp.T)(wires=0)
+qp.RZ(0.3, wires=0)
+qp.adjoint(qp.S)(wires=0)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.6 ============ -->
+    <section id="m6">
+      <div class="kicker"><span class="mod">I.6</span></div>
+      <h2>From a different angle</h2>
+      <p class="sec-lede">RZ rotates about the z-axis; RX and RY rotate about the others. Watch the amplitudes
+        oscillate and the half-angle convention appear.</p>
+
+      <article class="ex" id="i-6-1">
+        <div class="ex-head"><span class="ex-num">I.6.1</span><h4>Applying RX</h4></div>
+        <p><strong>RX(π)</strong> reproduces Pauli X up to the global phase \(-i\):
+          \(RX(\pi)=\begin{psmallmatrix}0&-i\\-i&0\end{psmallmatrix}=-iX\). The same physical flip, a
+          different global phase.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>if state == 1:
+    qp.PauliX(wires=0)
+qp.RX(np.pi, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-6-2">
+        <div class="ex-head"><span class="ex-num">I.6.2</span><h4>Plotting RX</h4></div>
+        <p>The matrix \(RX(\theta)=\begin{psmallmatrix}\cos\frac\theta2 & -i\sin\frac\theta2\\ -i\sin\frac\theta2 & \cos\frac\theta2\end{psmallmatrix}\)
+          acts on \(|0\rangle\) to give \(\cos\frac\theta2|0\rangle-i\sin\frac\theta2|1\rangle\): the \(|0\rangle\)
+          amplitude is <strong>real</strong>, the \(|1\rangle\) amplitude is <strong>imaginary</strong>, and both
+          oscillate with period \(4\pi\) — the fingerprint of the half-angle.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.RX(theta, wires=0)
+return qp.state()</code></pre>
+      </article>
+
+      <article class="ex" id="i-6-3">
+        <div class="ex-head"><span class="ex-num">I.6.3</span><h4>Plotting RY</h4></div>
+        <p><strong>RY</strong> keeps everything real:
+          \(RY(\theta)=\begin{psmallmatrix}\cos\frac\theta2 & -\sin\frac\theta2\\ \sin\frac\theta2 & \cos\frac\theta2\end{psmallmatrix}\).
+          Both amplitudes of \(RY(\theta)|0\rangle\) are real, which is exactly what the matrix predicts — a useful
+          gate when you want real coefficients.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.RY(theta, wires=0)
+return qp.state()</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.7 ============ -->
+    <section id="m7">
+      <div class="kicker"><span class="mod">I.7</span></div>
+      <h2>Universal gate sets</h2>
+      <p class="sec-lede">A handful of gates is enough to build everything. Two continuous rotations, or the
+        discrete pair {H, T}, can reach any single-qubit unitary — the foundation of quantum compilation.</p>
+
+      <article class="ex" id="i-7-1">
+        <div class="ex-head"><span class="ex-num">I.7.1</span><h4>Universality of rotations</h4></div>
+        <p><code>Rot(φ,θ,ω)</code> is RZ·RY·RZ under the hood (and any single-qubit unitary equally decomposes as
+          RZ·RX·RZ), so <strong>{RZ, RY}</strong> — or {RZ, RX} — is a <strong>universal gate set</strong> for one qubit. The Hadamard, a rotation by π
+          about the \((x+z)/\sqrt2\) axis, is three quarter-turns:</p>
+        \[ H=e^{i\pi/2}\,RZ(\tfrac\pi2)\,RX(\tfrac\pi2)\,RZ(\tfrac\pi2) \]
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>phi, theta, omega = np.pi/2, np.pi/2, np.pi/2
+qp.RZ(phi, wires=0); qp.RX(theta, wires=0); qp.RZ(omega, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-7-2">
+        <div class="ex-head"><span class="ex-num">I.7.2</span><h4>Synthesizing a circuit</h4></div>
+        <p>Rewrite the circuit \(H,\ S,\ T^\dagger,\ Y\) — applied left to right, so as an operator it is the
+          product \(Y\,T^\dagger S\,H\) — over {RZ, RX}. Substituting each gate's decomposition and merging
+          adjacent RZ rotations gives a five-gate circuit, but the <strong>ZXZ Euler decomposition</strong>
+          guarantees any single-qubit unitary needs only <strong>three</strong>. Matching that operator against
+          \(RZ(\omega)RX(\theta)RZ(\phi)\) yields \(\phi=-\tfrac\pi2,\ \theta=\tfrac\pi2,\ \omega=-\tfrac{3\pi}4\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.RZ(-np.pi/2, wires=0)
+qp.RX(np.pi/2, wires=0)
+qp.RZ(-3*np.pi/4, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-7-3">
+        <div class="ex-head"><span class="ex-num">I.7.3</span><h4>Universality of H and T</h4></div>
+        <p><strong>{H, T}</strong> is also universal: those two discrete gates approximate any single-qubit
+          unitary to arbitrary precision. Here the target is <em>exact</em> in six gates. The \((1/\sqrt2)^3\)
+          prefactor betrays three Hadamards, and a single \(e^{i\pi/4}\) per entry says the T gates never stack.
+          This is <strong>circuit synthesis</strong>, part of <strong>quantum compilation</strong>.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0); qp.T(wires=0); qp.Hadamard(wires=0)
+qp.T(wires=0); qp.T(wires=0); qp.Hadamard(wires=0)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.8 ============ -->
+    <section id="m8">
+      <div class="kicker"><span class="mod">I.8</span></div>
+      <h2>Prepare yourself</h2>
+      <p class="sec-lede">The inverse problem: given a target state, find the shortest circuit that builds it —
+        by hand for one qubit, and by template when it gets hard.</p>
+
+      <article class="ex" id="i-8-1">
+        <div class="ex-head"><span class="ex-num">I.8.1</span><h4>State preparation</h4></div>
+        <p>Target \(\tfrac1{\sqrt2}|0\rangle+\tfrac1{\sqrt2}e^{i5\pi/4}|1\rangle\). Two gates: Hadamard for the
+          equal superposition, then <strong>RZ(5π/4)</strong> to place the relative phase on \(|1\rangle\)
+          (correct up to a global phase).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)
+qp.RZ(5*np.pi/4, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-8-2">
+        <div class="ex-head"><span class="ex-num">I.8.2</span><h4>State preparation, revisited</h4></div>
+        <p>Target \(\tfrac{\sqrt3}2|0\rangle-\tfrac{i}2|1\rangle\). A single <strong>RX</strong> does it:
+          matching \(\cos\frac\theta2=\tfrac{\sqrt3}2\) and \(\sin\frac\theta2=\tfrac12\) gives
+          \(\theta=\pi/3\). Recognizing the RX signature (real |0⟩, imaginary |1⟩) saves gates.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.RX(np.pi/3, wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-8-3">
+        <div class="ex-head"><span class="ex-num">I.8.3</span><h4>State prep with Möttönen's method</h4></div>
+        <p><strong>Templates</strong> are subroutines usable like a gate. <code>qp.StatePrep</code> prepares any
+          normalized vector — invaluable for multi-qubit states where hand-derivation is hopeless. Drawing at
+          <code>level="device"</code> shows the underlying <strong>Möttönen</strong> RY/RZ sequence (plus a
+          GlobalPhase) it decomposes into.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.StatePrep(state, wires=0)
+<span class="c"># inspect the decomposition:</span>
+qp.draw(prepare_state, level="device")(v)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.9 ============ -->
+    <section id="m9">
+      <div class="kicker"><span class="mod">I.9</span></div>
+      <h2>Measurements</h2>
+      <p class="sec-lede">Return probabilities directly, and learn the one trick for measuring in <em>any</em>
+        basis: rotate that basis onto the computational one first.</p>
+
+      <article class="ex" id="i-9-1">
+        <div class="ex-head"><span class="ex-num">I.9.1</span><h4>Measuring a superposition</h4></div>
+        <p>End a QNode with <code>qp.probs(wires=...)</code> to get outcome probabilities directly. Applying H
+          to either \(|0\rangle\) or \(|1\rangle\) yields \([0.5, 0.5]\) — the minus sign in \(|-\rangle\) is
+          <strong>invisible</strong> to a computational-basis measurement.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)
+return qp.probs(wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-9-2">
+        <div class="ex-head"><span class="ex-num">I.9.2</span><h4>Y-basis rotation</h4></div>
+        <p>The eigenvectors of Pauli Y are \(|y_\pm\rangle=(|0\rangle\pm i|1\rangle)/\sqrt2\). The rotation that
+          builds them from the computational basis is <strong>S·H</strong>: Hadamard sends \(|0\rangle,|1\rangle\)
+          to \(|+\rangle,|-\rangle\), then S puts the factor of \(i\) on the \(|1\rangle\) component.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>def y_basis_rotation():
+    qp.Hadamard(wires=0)
+    qp.S(wires=0)</code></pre>
+      </article>
+
+      <article class="ex" id="i-9-3">
+        <div class="ex-head"><span class="ex-num">I.9.3</span><h4>Measurement in the Y basis</h4></div>
+        <p>The universal recipe: to measure in a different basis, apply the <strong>adjoint</strong> of the
+          rotation that <em>creates</em> that basis, then measure normally. Since <code>y_basis_rotation</code>
+          maps \(|0\rangle,|1\rangle\to|y_+\rangle,|y_-\rangle\), its adjoint rotates \(|y_\pm\rangle\) back so
+          <code>qp.probs</code> reads the Y-basis outcome.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>prepare_psi()
+qp.adjoint(y_basis_rotation)()
+return qp.probs(wires=0)</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.10 ============ -->
+    <section id="m10">
+      <div class="kicker"><span class="mod">I.10</span></div>
+      <h2>What did you expect?</h2>
+      <p class="sec-lede">Expectation values are how real quantum programs report answers. On a simulator they
+        are exact; on hardware they are estimated from shots — with a spread that shrinks predictably.</p>
+
+      <article class="ex" id="i-10-1">
+        <div class="ex-head"><span class="ex-num">I.10.1</span><h4>Measurement of PauliY</h4></div>
+        <p>Return <code>qp.expval</code> with a named <strong>observable</strong> instead of probabilities. Any
+          Pauli-based expectation value can only land in \([-1,1]\), between the observable's <strong>eigenvalues</strong>
+          \(+1\) and \(-1\).</p>
+        <div class="label-row"><span class="tag circuit-tag">circuit</span></div>
+        <pre class="circuit">|0> --[RX(π/4)]--[H]--[Z]--&lt;Y&gt;</pre>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>return qp.expval(qp.PauliY(0))   <span class="c"># PauliY(0) is shorthand for wires=0</span></code></pre>
+      </article>
+
+      <article class="ex" id="i-10-2">
+        <div class="ex-head"><span class="ex-num">I.10.2</span><h4>Setting up the number of shots</h4></div>
+        <p>Hardware cannot compute expectation values analytically — it <strong>samples</strong>. The
+          <strong>shot</strong> count is set on the device. As shots grow, the estimate converges to the
+          analytic value \(-1/\sqrt2\approx-0.7071\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>dev = qp.device("default.qubit", wires=1, shots=shots)
+<span class="c"># shots = 100, 1000, ... 1e6  →  estimate → −0.7071</span></code></pre>
+      </article>
+
+      <article class="ex" id="i-10-3">
+        <div class="ex-head"><span class="ex-num">I.10.3</span><h4>Evaluating the samples</h4></div>
+        <p>Return <code>qp.sample</code> for raw outcomes. Since the only results are \(\pm1\), the expectation
+          value is just their <strong>mean</strong>: \(\langle Y\rangle=\big(\#(+1)-\#(-1)\big)/N\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>n_plus  = np.count_nonzero(samples == 1)
+n_minus = np.count_nonzero(samples == -1)
+return (n_plus - n_minus) / len(samples)</code></pre>
+      </article>
+
+      <article class="ex" id="i-10-4">
+        <div class="ex-head"><span class="ex-num">I.10.4</span><h4>The variance of sample measurements</h4></div>
+        <p>Each run gives a slightly different estimate. For \(H\) then \(\langle Z\rangle\), a single shot is
+          \(\pm1\) with equal probability — mean 0, variance 1. Averaging \(N\) independent shots divides that
+          variance by \(N\):</p>
+        \[ \mathrm{Var}[\langle Z\rangle]=\frac{1}{N_{\text{shots}}} \]
+        <p>the \(1/N\) falloff (a \(1/\sqrt N\) shrinking error bar) that the log–log plot makes a straight line.</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>results = np.array([circuit() for _ in range(n_trials)])
+return np.var(results)          <span class="c"># experiment</span>
+<span class="c"># theory:</span>  estimated_variance = 1 / n_shots</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ MODULE I.11 ============ -->
+    <section id="m11">
+      <div class="kicker"><span class="mod">I.11</span></div>
+      <h2>Multi-qubit systems</h2>
+      <p class="sec-lede">Two qubits, four dimensions. Prepare basis states, measure several observables at once,
+        combine them with the tensor product — and see why a product state's joint expectation always factorizes.</p>
+
+      <article class="ex" id="i-11-1">
+        <div class="ex-head"><span class="ex-num">I.11.1</span><h4>Preparing basis states</h4></div>
+        <p><strong>Qubit ordering:</strong> PennyLane indexes wires left-to-right, and the leftmost qubit sits at
+          the top of the drawing. <code>qp.BasisState</code> takes a bit list, so writing an integer in binary
+          (padded to the wire count) gives \(|n\rangle\): \(3\to[0,1,1]\to|011\rangle\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>bits = [int(b) for b in np.binary_repr(basis_id, width=num_wires)]
+qp.BasisState(bits, wires=range(num_wires))</code></pre>
+      </article>
+
+      <article class="ex" id="i-11-2">
+        <div class="ex-head"><span class="ex-num">I.11.2</span><h4>Separable operations</h4></div>
+        <p>Build the <strong>product state</strong> \(|+\rangle\otimes|1\rangle\) and return two expectation values
+          as a tuple (allowed when they don't share wires). \(|+\rangle\) lies on the Bloch x-axis so
+          \(\langle Y\rangle=0\); \(|1\rangle\) is the \(-1\) eigenstate of Z so \(\langle Z\rangle=-1\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.Hadamard(wires=0)          <span class="c"># |+⟩</span>
+qp.PauliX(wires=1)            <span class="c"># |1⟩</span>
+return qp.expval(qp.PauliY(0)), qp.expval(qp.PauliZ(1))</code></pre>
+      </article>
+
+      <article class="ex" id="i-11-3">
+        <div class="ex-head"><span class="ex-num">I.11.3</span><h4>A two-qubit observable</h4></div>
+        <p>Combine observables with <code>@</code> for the <strong>tensor product</strong>. For the state
+          \(|1\rangle\otimes|-\rangle\), the expectation of \(Z\otimes X\) factorizes:
+          \(\langle Z\rangle=-1\) on \(|1\rangle\) and \(\langle X\rangle=-1\) on \(|-\rangle\), so
+          \(\langle Z\otimes X\rangle=1\).</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.PauliX(wires=0)
+qp.PauliX(wires=1); qp.Hadamard(wires=1)   <span class="c"># |1⟩|−⟩</span>
+return qp.expval(qp.PauliZ(0) @ qp.PauliX(1))</code></pre>
+      </article>
+
+      <article class="ex" id="i-11-4">
+        <div class="ex-head"><span class="ex-num">I.11.4</span><h4>Double trouble — factorization</h4></div>
+        <p>Measure \(Z\) on each qubit separately, then measure \(Z\otimes Z\). Because the qubits are never
+          <strong>entangled</strong>, the joint state is a product state and the ZZ expectation factorizes:</p>
+        \[ \langle Z\otimes Z\rangle=\langle Z\otimes I\rangle\cdot\langle I\otimes Z\rangle \]
+        <p>so the element-wise product of the two single-qubit curves lands exactly on the ZZ curve.
+          (You never spell out the identity part — <code>I⊗Z</code> is just <code>qp.PauliZ(1)</code>.)</p>
+        <div class="label-row"><span class="tag code-tag">solution</span></div>
+        <pre class="code"><code>qp.RX(theta, wires=0); qp.RY(2*theta, wires=1)
+<span class="c"># circuit_1:</span> return qp.expval(qp.PauliZ(0)), qp.expval(qp.PauliZ(1))
+<span class="c"># circuit_2:</span> return qp.expval(qp.PauliZ(0) @ qp.PauliZ(1))
+<span class="c"># combine:  </span> combined = ZI_results * IZ_results</code></pre>
+      </article>
+    </section>
+
+    <!-- ============ II.1 FORMAL MACHINERY ============ -->
+    <section id="machinery" class="prose">
+      <div class="kicker"><span class="mod">II.1</span></div>
+      <h2>The formal machinery</h2>
+      <p class="sec-lede">Part I used vectors and matrices directly. Part II needs the language physicists
+        actually speak — Dirac notation, operators built from outer products, the groups gates belong to, and
+        the equation that governs how any quantum system changes in time.</p>
+
+      <h3>Dirac notation, completely</h3>
+      <p>A <strong>ket</strong> \(|a\rangle\) is a column vector of amplitudes. A <strong>bra</strong>
+        \(\langle b|\) is its conjugate transpose — a row vector, obtained by transposing and flipping the sign
+        of every imaginary part (the <strong>dagger</strong>, \(\dagger\)). Put a bra against a ket and you get
+        the <strong>inner product</strong> \(\langle b|a\rangle\), a single (generally complex) number measuring
+        overlap. Put a ket against a bra the other way and you get an <strong>outer product</strong>
+        \(|a\rangle\langle b|\), a <em>matrix</em> — an operator.</p>
+      <div class="callout"><b>The completeness relation.</b> For any orthonormal basis,
+        \(\sum_i |i\rangle\langle i| = I\). Because this sum is just the identity, you can drop it into any
+        expression to "insert a basis." That trick is how you read a matrix element straight off an operator:
+        \(U_{ij} = \langle i|U|j\rangle\), and \(U = \sum_{i,j} U_{ij}\,|i\rangle\langle j|\).</div>
+
+      <h3>Observables are Hermitian; gates are unitary</h3>
+      <p>Two kinds of operators matter. An <strong>observable</strong> is <em>Hermitian</em>
+        (\(A=A^\dagger\)): real eigenvalues, orthogonal eigenvectors — the possible readings of a meter.
+        A <strong>gate</strong> is <em>unitary</em> (\(U^\dagger U = I\), so \(U^{-1}=U^\dagger\)): it preserves
+        length, hence total probability, and is always reversible. Every gate you apply can be undone by its
+        dagger; measurement is the one step that cannot.</p>
+
+      <h3>The groups: U(N) and SU(N)</h3>
+      <p>The unitaries of a given size form a <strong>group</strong> — closed under multiplication, each with an
+        inverse. \(U(N)\) is all \(N\times N\) unitaries; \(\mathrm{SU}(N)\) adds the condition
+        \(\det U = 1\), removing an overall phase. A single-qubit gate is an element of \(\mathrm{SU}(2)\),
+        which is exactly why three real angles (the Rot gate of I.3) describe it completely.</p>
+
+      <h3>Generators — every gate is an exponentiated observable</h3>
+      <p>Any unitary can be written \(U = e^{i\theta G}\) with \(G\) Hermitian; \(G\) is called the
+        <strong>generator</strong>. For a single qubit the generators are the Pauli matrices, so a rotation is
+        \(RX(\theta)=e^{-i(\theta/2)\sigma_x}=\cos\tfrac\theta2\,I - i\sin\tfrac\theta2\,\sigma_x\)
+        (\(\sigma\), the Greek letter <strong>sigma</strong>, denotes a Pauli). More generally a rotation by
+        \(\theta\) about any axis \(\hat n\) is
+        \(U(\theta)=e^{i(\theta/2)\,\hat n\cdot\vec\sigma}=\cos\tfrac\theta2\,I + i\sin\tfrac\theta2\,(\hat n\cdot\vec\sigma)\).
+        A function of a matrix is defined by its Taylor series, \(f(A)=\sum_n \tfrac1{n!}A^n\), and acts on an
+        eigenstate by acting on its eigenvalue: \(f(A)|a\rangle = f(a)|a\rangle\).</p>
+
+      <h3>How states change in time</h3>
+      <p>The continuous law behind every unitary is the <strong>Schrödinger equation</strong>,
+        \(i\hbar\,\tfrac{d}{dt}|\psi\rangle = \hat H|\psi\rangle\), where \(\hat H\) is the
+        <strong>Hamiltonian</strong> (the energy operator) and \(\hbar\) (<strong>h-bar</strong>) is Planck's
+        constant over \(2\pi\). For a constant \(\hat H\) this integrates to the time-evolution operator
+        \(U(t)=e^{-i\hat H t/\hbar}\) — a gate is just evolution for a fixed time under some Hamiltonian.
+        In the <strong>Schrödinger picture</strong> the state moves and operators sit still; in the equivalent
+        <strong>Heisenberg picture</strong> operators move by \(\tfrac{dO}{dt}=\tfrac1{i\hbar}[O,\hat H]\) and
+        states sit still. The bracket \([A,B]=AB-BA\) is the <strong>commutator</strong>.</p>
+
+      <h3>The adiabatic theorem</h3>
+      <p>If a Hamiltonian changes <em>slowly enough</em>, a system that starts in one of its energy eigenstates
+        stays in the corresponding eigenstate throughout, picking up only a phase. This is the
+        <strong>adiabatic theorem</strong> (Born &amp; Fock, 1928), and it is the working principle of
+        <em>adiabatic quantum computing</em> and quantum annealers: encode your answer as the ground state of a
+        final Hamiltonian, start in an easy ground state, and drift there slowly.</p>
+    </section>
+
+    <!-- ============ II.2 MEASUREMENT & INTERFERENCE ============ -->
+    <section id="measure2" class="prose">
+      <div class="kicker"><span class="mod">II.2</span></div>
+      <h2>Measurement, bases &amp; interference</h2>
+      <p class="sec-lede">Measurement is where quantum weirdness becomes numbers. The rule is geometric, it
+        depends on the basis you choose, and its deepest feature — interference — is the reason quantum
+        computing works at all.</p>
+
+      <h3>The Born rule, geometrically</h3>
+      <p>Write a qubit on the Bloch sphere as
+        \(|\psi\rangle=\cos\tfrac\theta2|0\rangle+e^{i\varphi}\sin\tfrac\theta2|1\rangle\). Measuring in the
+        computational basis gives \(P(0)=|\langle0|\psi\rangle|^2=\cos^2\tfrac\theta2\) and
+        \(P(1)=\sin^2\tfrac\theta2\). Points in the northern hemisphere are more likely to collapse to
+        \(|0\rangle\), the equator is a perfect 50/50, and a measurement projects the state onto whichever basis
+        vector it returned.</p>
+
+      <h3>Measuring in a different basis</h3>
+      <p>The computational basis is only one choice. The <strong>Hadamard (X) basis</strong> is
+        \(|\pm\rangle=(|0\rangle\pm|1\rangle)/\sqrt2\); the <strong>Y basis</strong> is
+        \(|y_\pm\rangle=(|0\rangle\pm i|1\rangle)/\sqrt2\). To measure in one of them, re-express \(|\psi\rangle\)
+        in that basis and apply the Born rule — or, in a circuit, rotate that basis back onto the computational
+        one and measure normally (exactly what Codercise <a href="#m9">I.9</a> does). A neat geometric fact:
+        <strong>antipodal points</strong> on the Bloch sphere are orthogonal states, which is why each basis is
+        a pair of opposite poles.</p>
+
+      <h3>Global vs relative phase — again, because it matters</h3>
+      <p>An overall factor \(e^{i\gamma}\) (global phase, \(\gamma\) = <strong>gamma</strong>) cancels in every
+        probability and is physically meaningless. A phase <em>between</em> components — the \(e^{i\varphi}\)
+        above — is invisible in the computational basis but changes the probabilities the instant you measure in
+        the X basis: \(P(+)=\tfrac12(1+\sin\theta\cos\varphi)\). Relative phase is real information hiding in a
+        basis you haven't looked in yet.</p>
+
+      <h3>Interference and the two-slit logic</h3>
+      <p>Suppose a particle can reach an outcome by two intermediate routes. If you <em>measure</em> which route
+        it took, the probabilities simply add: \(\sum_b |\langle c|b\rangle|^2|\langle b|a\rangle|^2\). If you do
+        <em>not</em>, the <em>amplitudes</em> add first and only then get squared — and the cross terms can cancel
+        or reinforce. That difference is <strong>interference</strong>, the same effect as light through two
+        slits. A quantum algorithm is a carefully built interference pattern: it arranges the amplitudes of wrong
+        answers to cancel and the right answer's to survive.</p>
+    </section>
+
+    <!-- ============ II.3 HARDWARE ============ -->
+    <section id="hardware" class="prose">
+      <div class="kicker"><span class="mod">II.3</span></div>
+      <h2>Physical qubits &amp; hardware</h2>
+      <p class="sec-lede">The math is substrate-independent; the machine is not. Any two-level quantum system
+        can be a qubit, and every abstract gate becomes a physical pulse on real, noisy, imperfectly connected
+        hardware.</p>
+
+      <h3>A qubit is a spin — and many other things</h3>
+      <p>The cleanest physical qubit is a <strong>spin-½</strong> particle: \(|0\rangle=|\!\uparrow\rangle\)
+        (spin up), \(|1\rangle=|\!\downarrow\rangle\) (spin down). But the two levels can be almost anything with
+        two distinguishable quantum states:</p>
+      <div class="gridcards">
+        <div class="mini"><b>Superconducting (transmon)</b><span>Two lowest levels of a superconducting LC circuit with a Josephson junction. The junction makes the energy levels <em>unevenly</em> spaced (anharmonic), so |0⟩ and |1⟩ can be addressed without exciting |2⟩. Today's most common platform (IBM, Google).</span></div>
+        <div class="mini"><b>Trapped ions</b><span>Two electronic levels of an ion held in an electromagnetic trap. Slow but very accurate, with all-to-all connectivity (IonQ).</span></div>
+        <div class="mini"><b>Photons</b><span>Polarization of a single photon — horizontal vs vertical. Naturally low-noise; hard to make interact.</span></div>
+        <div class="mini"><b>Neutral atoms / NMR / quantum dots / defects</b><span>Cold atoms, nuclear spins, trapped electrons, or crystal defects (like NV centers in diamond). A <strong>qudit</strong> generalizes to <em>d</em> levels.</span></div>
+      </div>
+      <p style="margin-top:16px">Why anharmonicity matters: a plain <strong>quantum harmonic oscillator</strong>
+        has evenly spaced levels, so a pulse that drives \(|0\rangle\to|1\rangle\) would also drive
+        \(|1\rangle\to|2\rangle\) and leak out of the qubit. The transmon's uneven spacing gives a clean,
+        isolated two-level subspace.</p>
+
+      <h3>Topology, transpilation, and noise</h3>
+      <p>Real chips only let <em>certain</em> qubit pairs interact — a <strong>coupling map</strong> (IBM's
+        heavy-hex lattice; IonQ's all-to-all). Your abstract circuit must be rewritten to fit the native gate
+        set and connectivity, inserting SWAPs and decomposing complex gates: this is
+        <strong>transpilation</strong>, and it usually makes the circuit longer. Every gate and readout has a
+        <strong>fidelity</strong> below 1, and each qubit slowly loses its quantum state to the environment —
+        <strong>decoherence</strong>, quantified by times like \(T_1\). This is why today's machines are called
+        <strong>NISQ</strong>: Noisy Intermediate-Scale Quantum.</p>
+      <div class="callout"><b>Scale check.</b> Simulating <em>n</em> qubits classically needs \(2^n\) complex
+        amplitudes — about 16 bytes each. So ~13 qubits ≈ 128 KB, ~36 qubits ≈ 1 TB, ~50 qubits ≈ 18 PB, and
+        ~56 qubits ≈ an exabyte — beyond any classical machine, which is why simulation hits a wall around
+        50 qubits. That exponential wall is the whole motivation for building the hardware. IBM's roadmap ran
+        Falcon (27) → Eagle (127) → Osprey (433) → Condor (1121); Google's error-corrected Willow chip (105
+        qubits) is a recent milestone.</div>
+    </section>
+
+    <!-- ============ II.4 MULTI-QUBIT ============ -->
+    <section id="multi" class="prose">
+      <div class="kicker"><span class="mod">II.4</span></div>
+      <h2>Multi-qubit gates &amp; entanglement</h2>
+      <p class="sec-lede">One qubit is a warm-up. Real power appears when qubits combine — through the tensor
+        product — and when two-qubit gates create correlations that no classical system can reproduce.</p>
+
+      <h3>Combining qubits: the tensor product</h3>
+      <p>Two systems join by the <strong>tensor product</strong> \(\otimes\). Dimensions
+        <em>multiply</em>: two qubits live in \(\mathbb{C}^2\otimes\mathbb{C}^2=\mathbb{C}^4\), with basis
+        \(|00\rangle,|01\rangle,|10\rangle,|11\rangle\). In components this is the <strong>Kronecker product</strong>:
+        \(|a\rangle\otimes|b\rangle\) stacks copies of the second vector scaled by each entry of the first. Operators
+        follow the rule \((A\otimes B)(C\otimes D)=AC\otimes BD\) — each factor minds its own qubit. (Contrast the
+        <em>direct sum</em> \(\oplus\), which stacks spaces and <em>adds</em> dimensions.)</p>
+
+      <h3>The Pauli algebra</h3>
+      <p>The Pauli matrices multiply by one compact rule:
+        \(\sigma_i\sigma_j=\delta_{ij}I+i\,\varepsilon_{ijk}\sigma_k\), where \(\delta_{ij}\)
+        (<strong>Kronecker delta</strong>) is 1 when the indices match and \(\varepsilon_{ijk}\)
+        (<strong>Levi-Civita symbol</strong>, the Greek letter <strong>epsilon</strong>) encodes the cyclic
+        \(x\to y\to z\) order. Two Paulis on the <em>same</em> qubit generally don't commute; Paulis on
+        <em>different</em> qubits always do.</p>
+
+      <h3>Two-qubit gates</h3>
+      <div class="gridcards">
+        <div class="mini"><b>CNOT (controlled-NOT)</b><span class="ci">|a⟩|b⟩ → |a⟩|a⊕b⟩</span><span>Flip the target when the control is |1⟩. The basic entangler.</span></div>
+        <div class="mini"><b>Controlled-U</b><span class="ci">apply U iff control = |1⟩</span><span>Generalizes CNOT; U = X, Y, Z give CX, CY, CZ.</span></div>
+        <div class="mini"><b>CZ / CPhase(φ)</b><span class="ci">phase e^{iφ} on |11⟩</span><span>CPhase(π) = CZ, a −1 on |11⟩. Symmetric in its two qubits.</span></div>
+        <div class="mini"><b>SWAP</b><span class="ci">|ab⟩ → |ba⟩</span><span>Exchanges two qubits. Equals ½(I⊗I + X⊗X + Y⊗Y + Z⊗Z).</span></div>
+      </div>
+
+      <h3>Separable vs entangled</h3>
+      <p>A two-qubit state is <strong>separable</strong> if it factorizes, \(|\psi\rangle=|\alpha\rangle\otimes|\beta\rangle\)
+        — then measurements on the two qubits are independent (this is the whole point of Codercise
+        <a href="#m11">I.11</a>). If it does <em>not</em> factorize it is <strong>entangled</strong>. Running a
+        Hadamard then a CNOT builds the <strong>Bell state</strong> \((|00\rangle+|11\rangle)/\sqrt2\): measure
+        one qubit and the other is instantly determined. That perfect correlation in a single basis is classically
+        explainable, but the correlations across <em>different</em> measurement bases exceed any local classical
+        model — the content of Bell's theorem. The three-qubit version is the <strong>GHZ state</strong>
+        \((|000\rangle+|111\rangle)/\sqrt2\).</p>
+      <pre class="circuit">|0> --[H]--*--        Bell state:
+           |          (|00> + |11>) / sqrt(2)
+|0> ------(+)-</pre>
+      <p>To ask about just one qubit of an entangled pair, you take a <strong>partial trace</strong> over the
+        other — the operation that reduces a joint state to the effective state of a subsystem.</p>
+    </section>
+
+    <!-- ============ II.5 PROTOCOLS ============ -->
+    <section id="protocols" class="prose">
+      <div class="kicker"><span class="mod">II.5</span></div>
+      <h2>Teleportation &amp; entanglement protocols</h2>
+      <p class="sec-lede">Entanglement is not just a curiosity — it is a resource. Three results show what it
+        buys you, and one deep limit shows what it forbids.</p>
+
+      <h3>The no-cloning theorem</h3>
+      <p>You cannot copy an unknown quantum state. Suppose a machine \(U\) copied any state:
+        \(U(|a\rangle|0\rangle)=|a\rangle|a\rangle\). Feed it a superposition
+        \(|c\rangle=(|a\rangle+|b\rangle)/\sqrt2\). Linearity forces the output to be
+        \((|a\rangle|a\rangle+|b\rangle|b\rangle)/\sqrt2\), but genuine copying would demand \(|c\rangle|c\rangle\),
+        which expands to four terms. The two disagree — contradiction. You <em>can</em> copy a known state, and
+        you can spread one unknown qubit into an entangled \(a|0\cdots0\rangle+b|1\cdots1\rangle\), but you cannot
+        make independent duplicates. This underpins quantum cryptography and forces the clever machinery of
+        quantum error correction.</p>
+
+      <h3>Superdense coding — two bits down one qubit</h3>
+      <p>Alice and Bob pre-share a Bell pair. Alice wants to send two classical bits \((a,b)\). She applies one
+        of four local gates to her half — \(I, X, Z,\) or \(Y\) — then sends her single qubit to Bob. Bob runs a
+        CNOT and a Hadamard, measures both qubits, and reads off \((a,b)\) with certainty. One transmitted qubit
+        carried two classical bits — because the shared entanglement did half the work in advance.</p>
+
+      <h3>Quantum teleportation — moving a state without moving a qubit</h3>
+      <p>The reverse trick. Alice holds an unknown \(|\psi\rangle=\alpha|0\rangle+\beta|1\rangle\) and shares a
+        Bell pair with Bob. She entangles \(|\psi\rangle\) with her half (CNOT then Hadamard), measures her two
+        qubits, and sends Bob the two classical outcomes. Depending on what she got, Bob applies \(I\), \(X\),
+        \(Z\), or \(ZX\) to his half — and it becomes \(|\psi\rangle\) exactly.</p>
+      <div class="callout"><b>No contradiction with no-cloning.</b> Alice's measurement destroys her copy, so at
+        the end the state exists in exactly one place. And nothing travels faster than light: Bob's qubit is
+        useless until the two classical bits arrive by ordinary channels.</div>
+    </section>
+
+    <!-- ============ II.6 REVERSIBLE ============ -->
+    <section id="reversible" class="prose">
+      <div class="kicker"><span class="mod">II.6</span></div>
+      <h2>Reversible computation &amp; oracles</h2>
+      <p class="sec-lede">Quantum gates are unitary, so quantum computation is reversible — which means an
+        ordinary function has to be repackaged before a quantum computer can call it. That repackaging, plus one
+        phase trick, is the engine of the first algorithms.</p>
+
+      <h3>Reversible logic</h3>
+      <p>Classical AND, OR, and NAND throw away information — from the output you can't recover the inputs, so
+        they are <strong>irreversible</strong>. Only NOT is reversible. Every quantum operation before
+        measurement is reversible (it's unitary), so classical logic must first be rebuilt from reversible gates.
+        The <strong>Toffoli gate</strong> (controlled-controlled-NOT) computes AND reversibly by writing the
+        result into a fresh qubit; it is <em>universal</em> for classical reversible computing. The
+        <strong>Fredkin gate</strong> (controlled-SWAP) is another universal choice.</p>
+
+      <h3>The oracle U<sub>f</sub></h3>
+      <p>To run a function \(f\) on a quantum computer, wrap it in a reversible <strong>oracle</strong>:
+        \[ U_f\,\big(|x\rangle\otimes|y\rangle\big)=|x\rangle\otimes|y\oplus f(x)\rangle, \]
+        where \(\oplus\) is addition mod 2 (XOR). Applying \(U_f\) twice returns the input, confirming it's
+        reversible. The oracle is treated as a "black box" you may query; algorithms are judged by how many
+        queries they need — their <strong>query complexity</strong>.</p>
+
+      <h3>Quantum parallelism and phase kickback</h3>
+      <p>Feed the oracle a superposition of all inputs (a Hadamard on each input qubit) and it evaluates \(f\) on
+        all of them at once: <strong>quantum parallelism</strong>. That sounds like magic, but measurement
+        returns only one \((x,f(x))\) pair, so you can't just read them all out. The real trick is
+        <strong>phase kickback</strong>: prepare the target qubit in \(|-\rangle\), and the oracle stops flipping
+        it and instead stamps the value onto a <em>phase</em> of the input:
+        \[ U_f\big(|x\rangle\otimes|-\rangle\big)=(-1)^{f(x)}\,|x\rangle\otimes|-\rangle. \]
+        Now \(f\)'s output lives in a relative phase — exactly the thing interference can read.</p>
+    </section>
+
+    <!-- ============ II.7 ALGORITHMS ============ -->
+    <section id="algorithms" class="prose">
+      <div class="kicker"><span class="mod">II.7</span></div>
+      <h2>The first quantum algorithms</h2>
+      <p class="sec-lede">Put superposition, the oracle, phase kickback, and interference together and you get the
+        earliest proofs that a quantum computer can beat a classical one — by learning a <em>global</em> property
+        of a function in far fewer queries.</p>
+
+      <h3>The Walsh–Hadamard transform</h3>
+      <p>Applying a Hadamard to every qubit, \(W=H^{\otimes n}\), turns \(|0\cdots0\rangle\) into an equal
+        superposition of all \(N=2^n\) basis states, \(W|0\rangle=\tfrac1{\sqrt N}\sum_x|x\rangle\). On a general
+        state it produces the sign pattern \(W|r\rangle=\tfrac1{\sqrt N}\sum_s(-1)^{r\cdot s}|s\rangle\). This
+        single operation — spread everything out, then interfere it back — sits at the heart of nearly every
+        algorithm here.</p>
+      <div class="callout"><b>The identity that makes it work.</b> The interference collapses because of a
+        bit-string orthogonality sum: \(\sum_x (-1)^{x\cdot y} = 2^n\) if \(y=0\), and \(0\) otherwise. In
+        Deutsch–Jozsa this is exactly why a <em>constant</em> \(f\) funnels all amplitude into \(|0\cdots0\rangle\)
+        while a <em>balanced</em> \(f\) leaves that outcome with zero amplitude. (Here \(x\cdot y\) is the bitwise
+        dot product mod 2, and the <strong>Hamming weight</strong> of a string counts its 1-bits.)</div>
+
+      <div class="gridcards">
+        <div class="mini"><b>Deutsch (1985)</b><span>Is a one-bit function <em>constant</em> (same on both inputs) or <em>balanced</em> (different)? Classically you must evaluate it twice. With H, the oracle, and H again, a single query answers it — the first quantum speedup.</span></div>
+        <div class="mini"><b>Deutsch–Jozsa</b><span>The same question for an <em>n</em>-bit function promised to be constant or balanced. One oracle query gives the answer with certainty; a <em>deterministic</em> classical algorithm can need 2^{n−1}+1 queries — an exponential separation (a randomized classical algorithm that tolerates a little error needs only a few).</span></div>
+        <div class="mini"><b>Bernstein–Vazirani</b><span>A hidden bit-string <em>s</em> defines f(x) = x·s mod 2. Classically you recover one bit of s per query (n total); quantumly, superposition plus interference reveals all of s in a single query.</span></div>
+      </div>
+
+      <h3>How Deutsch actually works</h3>
+      <p>Start with \(|0\rangle|1\rangle\), Hadamard both. The input becomes \((|0\rangle+|1\rangle)/\sqrt2\) and
+        the target becomes \(|-\rangle\). The oracle kicks back a phase \((-1)^{f(x)}\) onto each branch, so the
+        input turns into \(\big((-1)^{f(0)}|0\rangle+(-1)^{f(1)}|1\rangle\big)/\sqrt2\). A final Hadamard makes
+        those two phases interfere: if \(f(0)=f(1)\) (constant) the branches add to \(|0\rangle\); if they differ
+        (balanced) they add to \(|1\rangle\). One measurement, one query, whole answer.</p>
+      <pre class="circuit">|0> --[H]--[   ]--[H]--[M]     measure 0  => constant
+           [ Uf]              measure 1  => balanced
+|1> --[H]--[   ]--------</pre>
+      <div class="callout"><b>The point isn't faster arithmetic.</b> These algorithms don't speed up computing
+        \(f\); they cut the <em>number of times you must ask</em> the black box to learn a global fact about it.
+        That query-complexity view is how quantum advantage is first proven.</div>
+    </section>
+
+    <!-- ============ II.8 QML ============ -->
+    <section id="qml" class="prose">
+      <div class="kicker"><span class="mod">II.8</span></div>
+      <h2>Machine learning &amp; data encoding</h2>
+      <p class="sec-lede">To learn from classical data on a quantum computer, you first have to <em>load</em> the
+        data into a quantum state. How you encode it shapes everything that follows — and trainable circuits then
+        play the role of neural networks.</p>
+
+      <h3>The pipeline</h3>
+      <p>Quantum machine learning mirrors the classical loop — dataset in, prediction out — but the middle is a
+        quantum circuit: <strong>encode</strong> the data into a state, <strong>process</strong> it with a
+        parametrized unitary, then <strong>measure</strong> to read a prediction. Everything hinges on the first
+        step, the <strong>feature map</strong> that carries classical numbers into Hilbert space.</p>
+
+      <h3>Five ways to encode data</h3>
+      <div class="gridcards">
+        <div class="mini"><b>Basis encoding</b><span>A bit string x becomes the basis state |x⟩. Simple; uses n qubits for n bits.</span></div>
+        <div class="mini"><b>Amplitude encoding</b><span>A normalized vector of 2ⁿ numbers is stored in the amplitudes, |ψ⟩ = Σ xᵢ|i⟩. Exponentially compact.</span></div>
+        <div class="mini"><b>Angle / rotation encoding</b><span>Each value becomes a rotation angle, e.g. RY(xⱼ) on qubit j. One number per qubit.</span></div>
+        <div class="mini"><b>Time-evolution encoding</b><span>A value x sets the evolution time: U(x) = e^{−ixH}.</span></div>
+        <div class="mini"><b>Hamiltonian encoding</b><span>A matrix A is loaded as a Hamiltonian (block-embedded if it isn't Hermitian).</span></div>
+      </div>
+      <p style="margin-top:16px">Before encoding, data is usually <strong>standardised</strong> (zero mean, unit
+        variance) and <strong>normalised</strong> (scaled to unit length, so points land on a circle or sphere).
+        The classic worked example is Fisher's <strong>Iris</strong> flower dataset.</p>
+
+      <h3>Data re-uploading &amp; variational circuits</h3>
+      <p>A single qubit alone is a weak model — a gate only rotates one Bloch sphere. But if you
+        <strong>re-upload</strong> the same data several times, interleaved with trainable rotations, the layers
+        stack like the hidden layers of a neural network and a single qubit becomes a <em>universal</em>
+        classifier. More generally, a <strong>variational quantum algorithm</strong> (VQA) runs a parametrized
+        circuit \(U(x;\theta)\), measures a cost \(\mathbb{E}[(y-f(x;\theta))^2]\), and a classical optimizer
+        updates the parameters \(\theta\) — a hybrid quantum/classical training loop. The
+        <strong>VQE</strong> (variational quantum eigensolver) uses the same idea to find ground-state energies.</p>
+
+      <h3>The swap test</h3>
+      <p>A recurring subroutine: to estimate the overlap \(|\langle a|b\rangle|^2\) of two states, run a Hadamard,
+        a controlled-SWAP, and a Hadamard on an ancilla qubit, then measure it. The ancilla reads \(0\) with
+        probability \(P(0)=\tfrac12+\tfrac12|\langle a|b\rangle|^2\), so \(|\langle a|b\rangle|^2 = 2P(0)-1\):
+        identical states give \(P(0)=1\), orthogonal ones give \(P(0)=\tfrac12\). It is a distance measure that
+        powers distance-based classifiers, at a cost that grows with \(\log\) of the vector dimension rather
+        than the dimension itself.</p>
+    </section>
+
+    <!-- ============ II.9 COMPLEXITY ============ -->
+    <section id="complexity" class="prose">
+      <div class="kicker"><span class="mod">II.9</span></div>
+      <h2>Complexity &amp; quantum advantage</h2>
+      <p class="sec-lede">"Quantum is faster" is too vague. The real question is how a problem's cost
+        <em>scales</em> with its size — and for a specific set of problems, quantum scaling is dramatically
+        better.</p>
+
+      <h3>Efficient vs inefficient</h3>
+      <p>An algorithm is <strong>efficient</strong> if its runtime grows <em>polynomially</em> with the input
+        size \(n\), and <strong>inefficient</strong> if it grows <em>exponentially</em>. The gap is not subtle.
+        Going from \(n=1000\) to \(n=1050\): an \(n^4\) algorithm slows by a factor of about
+        \((1050/1000)^4\approx1.2\); a \(2^n\) algorithm slows by \(2^{50}\), turning one second into roughly
+        36 million years. "Hard" problems are the exponential ones.</p>
+
+      <h3>Where quantum computers help</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Problem</th><th>Classical</th><th>Quantum</th></tr></thead>
+          <tbody>
+            <tr><td>Unstructured search (Grover)</td><td class="m">O(N)</td><td class="m">O(√N)</td></tr>
+            <tr><td>Integer factoring (Shor)</td><td class="m">sub-exponential</td><td class="m">polynomial</td></tr>
+            <tr><td>Fourier transform</td><td class="m">N log N (FFT)</td><td class="m">(log N)² (QFT)</td></tr>
+            <tr><td>Linear systems (HHL)</td><td class="m">O(N)–O(N³)</td><td class="m">~poly(log N, κ)</td></tr>
+            <tr><td>Support vector machine</td><td class="m">O(NM)</td><td class="m">O(log NM)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:16px">The resource behind this is the <strong>exponential state space</strong>: \(n\)
+        qubits carry \(2^n\) complex amplitudes at once. That's also why classical simulation hits a wall around
+        50 qubits. But the advantage is <em>problem-specific</em> — <strong>quantum supremacy</strong> (or the
+        more careful term <strong>quantum advantage</strong>) means beating classical machines on a particular
+        task, not a blanket speedup. Grover's search over \(N\) items, for instance, needs a quadratic (not
+        exponential) speedup, \(O(\sqrt N)\), and \(\kappa\) (<strong>kappa</strong>) in HHL is the matrix's
+        condition number.</p>
+    </section>
+
+    <!-- ============ II.10 ROADMAP ============ -->
+    <section id="roadmap" class="prose">
+      <div class="kicker"><span class="mod">II.10</span></div>
+      <h2>The road ahead</h2>
+      <p class="sec-lede">This course is the on-ramp. Everything above builds toward a sequence of landmark
+        algorithms — here is the map of where the ideas go next.</p>
+      <ul class="postulates">
+        <li><span class="p-num">Period finding</span><b>Simon's algorithm</b>
+          <span>The next step after Bernstein–Vazirani: find a hidden period of a function with an exponential
+          query speedup. It is the conceptual bridge from the oracle algorithms to Shor's period-finding core.</span></li>
+        <li><span class="p-num">Structured speedups</span><b>Quantum Fourier Transform &amp; phase estimation</b>
+          <span>The QFT finds periodicity in a state exponentially faster than the classical FFT; phase
+          estimation reads an eigenvalue's phase. Together they are the core subroutine of the next two items.</span></li>
+        <li><span class="p-num">Cryptography</span><b>Shor's factoring algorithm</b>
+          <span>Uses phase estimation to factor large integers in polynomial time — breaking RSA-style
+          encryption, and the single most famous result in the field.</span></li>
+        <li><span class="p-num">Search</span><b>Grover's algorithm</b>
+          <span>Finds a marked item among N in \(O(\sqrt N)\) steps via amplitude amplification — a broad,
+          quadratic speedup for unstructured search.</span></li>
+        <li><span class="p-num">Optimization</span><b>QUBO, max-cut, annealing</b>
+          <span>Encode a hard optimization as finding a Hamiltonian's ground state, then reach it with the
+          adiabatic theorem on a quantum annealer.</span></li>
+        <li><span class="p-num">Near-term / hybrid</span><b>VQE, QAOA, data re-uploading</b>
+          <span>Variational algorithms tailored to noisy hardware — chemistry ground states (VQE), combinatorial
+          optimization (QAOA), and quantum machine-learning models.</span></li>
+        <li><span class="p-num">Fault tolerance</span><b>Quantum error correction</b>
+          <span>Because states can't be copied (no-cloning) and decohere, information is spread across many
+          physical qubits — bit-flip and phase-flip codes, stabilizers, and the threshold theorem: once error
+          rates drop below a threshold, adding qubits makes a logical qubit <em>more</em> reliable. This is the
+          road from NISQ to large-scale machines, and what Google's Willow chip began to demonstrate.</span></li>
+      </ul>
+    </section>
+
+    <!-- ============ II.11 HISTORY ============ -->
+    <section id="history" class="prose">
+      <div class="kicker"><span class="mod">II.11</span></div>
+      <h2>A short history of quantum computing</h2>
+      <p class="sec-lede">The ideas didn't arrive in the order you learn them. A century separates the birth of
+        quantum mechanics from an error-corrected chip.</p>
+      <ul class="tl">
+        <li><span class="yr">1925</span><span><b>Quantum mechanics is born.</b><span class="d">Heisenberg, Born, and Jordan build matrix mechanics; the theory of the very small takes formal shape.</span></span></li>
+        <li><span class="yr">1935</span><span><b>EPR &amp; Schrödinger's cat.</b><span class="d">Einstein–Podolsky–Rosen and Schrödinger spotlight entanglement — "spooky action at a distance."</span></span></li>
+        <li><span class="yr">1980</span><span><b>Benioff's quantum machine.</b><span class="d">Paul Benioff describes a quantum-mechanical model of a Turing machine — computation obeying quantum rules.</span></span></li>
+        <li><span class="yr">1981</span><span><b>Feynman's challenge.</b><span class="d">"Simulating Physics with Computers" argues that simulating quantum systems needs a quantum machine.</span></span></li>
+        <li><span class="yr">1985</span><span><b>Deutsch's quantum Turing machine.</b><span class="d">The first formal model of a quantum computer — and the first quantum algorithm.</span></span></li>
+        <li><span class="yr">1992–94</span><span><b>Deutsch–Jozsa, then Shor.</b><span class="d">A clean exponential query separation, then Shor's factoring algorithm makes the field urgent.</span></span></li>
+        <li><span class="yr">1993</span><span><b>Teleportation, on paper.</b><span class="d">Bennett and colleagues describe how to teleport an unknown quantum state using entanglement and classical bits.</span></span></li>
+        <li><span class="yr">1996</span><span><b>Grover's search.</b><span class="d">A quadratic speedup for the most generic problem there is: finding a needle in a haystack.</span></span></li>
+        <li><span class="yr">2011</span><span><b>First commercial machine.</b><span class="d">D-Wave ships an early quantum annealer.</span></span></li>
+        <li><span class="yr">2019</span><span><b>Quantum supremacy claimed.</b><span class="d">Google's Sycamore performs a sampling task said to be infeasible classically.</span></span></li>
+        <li><span class="yr">2022</span><span><b>Nobel Prize &amp; 433 qubits.</b><span class="d">Aspect, Clauser, and Zeilinger win for Bell-inequality experiments; IBM's Osprey reaches 433 qubits.</span></span></li>
+        <li><span class="yr">2023</span><span><b>Breakthrough Prize.</b><span class="d">Bennett, Brassard, Deutsch, and Shor are honored for the foundations of quantum information and computing.</span></span></li>
+        <li><span class="yr">2024</span><span><b>Error correction turns a corner.</b><span class="d">Google's Willow (105 qubits) demonstrates error rates that fall as the code grows — the long-sought threshold behavior.</span></span></li>
+      </ul>
+    </section>
+
+    <!-- ============ REFERENCE ============ -->
+    <section id="reference">
+      <div class="kicker"><span class="mod">§A</span></div>
+      <h2>Gate reference table</h2>
+      <p class="sec-lede">Every gate used in the course, with its action and PennyLane call. The Pauli
+        expectation values always sit in \([-1,1]\); phases with a global factor are written “up to phase.”</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Gate</th><th>PennyLane</th><th>Action</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="g">X</td><td class="m">qp.PauliX</td><td>|0⟩↔|1⟩</td><td>Bit-flip / NOT. Initialize |1⟩.</td></tr>
+            <tr><td class="g">Y</td><td class="m">qp.PauliY</td><td>[[0,−i],[i,0]]</td><td>Bit- and phase-flip; eigenstates |y±⟩.</td></tr>
+            <tr><td class="g">Z</td><td class="m">qp.PauliZ</td><td>|1⟩→−|1⟩</td><td>Phase-flip; probs unchanged.</td></tr>
+            <tr><td class="g">H</td><td class="m">qp.Hadamard</td><td>|0⟩→|+⟩, |1⟩→|−⟩</td><td>Uniform superposition; self-inverse.</td></tr>
+            <tr><td class="g">S</td><td class="m">qp.S</td><td>|1⟩→ i|1⟩</td><td>= RZ(π/2) = √Z (up to phase).</td></tr>
+            <tr><td class="g">T</td><td class="m">qp.T</td><td>|1⟩→ e^{iπ/4}|1⟩</td><td>= RZ(π/4) up to phase; √S. With H, universal.</td></tr>
+            <tr><td class="g">RX(θ)</td><td class="m">qp.RX</td><td>cos(θ/2)|0⟩ − i·sin(θ/2)|1⟩</td><td>x-rotation; RX(π)=−iX.</td></tr>
+            <tr><td class="g">RY(θ)</td><td class="m">qp.RY</td><td>real cos/sin amplitudes</td><td>y-rotation; keeps coefficients real.</td></tr>
+            <tr><td class="g">RZ(ω)</td><td class="m">qp.RZ</td><td>relative phase e^{iω} on |1⟩</td><td>z-rotation; RZ(π)=Z up to phase.</td></tr>
+            <tr><td class="g">P(φ)</td><td class="m">qp.PhaseShift</td><td>e^{iφ} on |1⟩, |0⟩ fixed</td><td>General phase gate; S = P(π/2), T = P(π/4), Z = P(π).</td></tr>
+            <tr><td class="g">Rot(φ,θ,ω)</td><td class="m">qp.Rot</td><td>RZ(ω)·RY(θ)·RZ(φ)</td><td>General single-qubit unitary.</td></tr>
+            <tr><td class="g">U</td><td class="m">qp.QubitUnitary</td><td>|ψ⟩→U|ψ⟩</td><td>Arbitrary matrix on given wires.</td></tr>
+            <tr><td class="g">CNOT / CX</td><td class="m">qp.CNOT</td><td>flip target if control = |1⟩</td><td>Two-qubit entangling gate; builds Bell states.</td></tr>
+            <tr><td class="g">CZ</td><td class="m">qp.CZ</td><td>−1 phase on |11⟩</td><td>Controlled-Z; symmetric in its two qubits.</td></tr>
+            <tr><td class="g">CPhase(φ)</td><td class="m">qp.ControlledPhaseShift</td><td>phase e^{iφ} on |11⟩</td><td>CPhase(π) = CZ.</td></tr>
+            <tr><td class="g">SWAP</td><td class="m">qp.SWAP</td><td>|ab⟩ → |ba⟩</td><td>Exchanges two qubits.</td></tr>
+            <tr><td class="g">Toffoli</td><td class="m">qp.Toffoli</td><td>flip target if both controls = |1⟩</td><td>CCNOT; universal for reversible logic (AND).</td></tr>
+            <tr><td class="g">C-U</td><td class="m">qp.ctrl(op)</td><td>apply U if control = |1⟩</td><td>Generic controlled gate.</td></tr>
+            <tr><td class="g">U†</td><td class="m">qp.adjoint(U)</td><td>inverse of U</td><td>Wraps op before its args/wires.</td></tr>
+            <tr><td class="g">StatePrep</td><td class="m">qp.StatePrep</td><td>build any |ψ⟩</td><td>Template; Möttönen RY/RZ decomposition.</td></tr>
+            <tr><td class="g">BasisState</td><td class="m">qp.BasisState</td><td>prepare |n⟩ from bits</td><td>Wire 0 is the leftmost bit.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p><strong>Qubits to Circuits</strong> — a study companion for an introduction to quantum algorithms.
+        <strong>Part I</strong> walks the PennyLane Codebook Module I (exercises I.1–I.11) with the essential
+        solution lines for each; run any file with <code>uv run &lt;file&gt;.py</code>, as each carries its own
+        inline dependencies. <strong>Part II</strong> builds the surrounding theory and algorithms — the formal
+        machinery, measurement and interference, hardware, multi-qubit gates and entanglement, teleportation and
+        superdense coding, reversible oracles, the Deutsch / Deutsch–Jozsa / Bernstein–Vazirani algorithms,
+        quantum machine learning, complexity, and the roadmap toward Shor and Grover. Every Greek letter and
+        symbol is named in the notation guide, and every recurring term is defined in the glossary.</p>
+    </footer>
+  </main>
+</div>
+
+<button class="theme-btn" id="themeBtn" aria-label="Toggle light/dark theme" title="Toggle theme">◐</button>
+
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']],
+           packages: {'[+]': ['ams']} },
+    svg: { fontCache: 'global' },
+    startup: { typeset: false }
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" async></script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---- theme toggle ---- */
+  const root = document.documentElement;
+  const btn = document.getElementById("themeBtn");
+  let stored = null;
+  try { stored = localStorage.getItem("qtc-theme"); } catch (e) {}
+  if (stored === "light" || stored === "dark") root.setAttribute("data-theme", stored);
+  function currentIsDark() {
+    const t = root.getAttribute("data-theme");
+    if (t === "dark") return true;
+    if (t === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  btn.addEventListener("click", function () {
+    const next = currentIsDark() ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("qtc-theme", next); } catch (e) {}
+  });
+
+  /* ---- mobile nav ---- */
+  const rail = document.getElementById("rail");
+  const scrim = document.getElementById("scrim");
+  const menuBtn = document.getElementById("menuBtn");
+  function closeNav() { rail.classList.remove("open"); scrim.classList.remove("open"); }
+  if (menuBtn) menuBtn.addEventListener("click", function () {
+    rail.classList.toggle("open"); scrim.classList.toggle("open");
+  });
+  if (scrim) scrim.addEventListener("click", closeNav);
+  document.querySelectorAll("nav.toc a").forEach(function (a) {
+    a.addEventListener("click", closeNav);
+  });
+
+  /* ---- scroll-spy ---- */
+  const links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
+  const byId = {};
+  links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+  const targets = links
+    .map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); })
+    .filter(Boolean);
+  let activeId = null;
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    links.forEach(function (a) { a.classList.remove("active"); });
+    if (byId[id]) byId[id].classList.add("active");
+  }
+  const spy = new IntersectionObserver(function (entries) {
+    let best = null;
+    entries.forEach(function (en) {
+      if (en.isIntersecting) {
+        if (!best || en.boundingClientRect.top < best.boundingClientRect.top) best = en;
+      }
+    });
+    if (best) setActive(best.target.id);
+  }, { rootMargin: "-10% 0px -75% 0px", threshold: 0 });
+  targets.forEach(function (t) { spy.observe(t); });
+
+  /* ---- glossary filter ---- */
+  const search = document.getElementById("glossary-search");
+  const terms = Array.prototype.slice.call(document.querySelectorAll(".term"));
+  const count = document.getElementById("gCount");
+  const noHits = document.getElementById("noHits");
+  function refresh(q) {
+    q = (q || "").trim().toLowerCase();
+    let shown = 0;
+    terms.forEach(function (t) {
+      const hit = !q || t.textContent.toLowerCase().indexOf(q) !== -1;
+      t.classList.toggle("hidden", !hit);
+      if (hit) shown++;
+    });
+    count.textContent = shown + " / " + terms.length + " terms";
+    noHits.style.display = shown ? "none" : "block";
+  }
+  if (search) {
+    search.addEventListener("input", function () { refresh(search.value); });
+    refresh("");
+  }
+
+  /* ---- typeset math once MathJax is ready ---- */
+  function typeset() {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise();
+    } else {
+      setTimeout(typeset, 60);
+    }
+  }
+  typeset();
+})();
+</script>
